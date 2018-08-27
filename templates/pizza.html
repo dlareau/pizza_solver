@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Friendzone.pizza</title>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+            padding: 10px;
+        }
+        .dot {
+            height: 50px;
+            width: 50px;
+            background-color: #e8c333;
+            border: 5px solid black;
+            padding: 20px;
+            border-radius: 50%;
+            display: inline-block;
+            text-align: center
+        }
+    </style>
+</head>
+<body>
+    There are {{num_pizzas}} pizzas:
+    <br>
+    <br>
+    <table>
+    {% for group, toppings in grp_tps %}
+        <tr>
+            <td>
+            <span class="dot">
+                {% for person in group %}
+                    {{ person }}
+                    {% if not loop.last %}
+                    <br>
+                    {% endif %}
+                {% endfor %}
+            </span>
+            </td>
+            <td>
+            {% for topping, idx in toppings %}
+                {{ topping }}
+                {% if not loop.last %}
+                    <br>
+                {% endif %}
+            {% endfor %}
+            </td>
+        </tr>
+    {% endfor %}
+    </table>
+
+    <p><b>
+        Understanding the results:
+    </b></p>
+    <p>
+        The toppings listed above are all of the things that the people
+        ordering the pizza like, you can (and in some cases should) only pick
+        a subset of these.
+    </p>
+
+</body>
+</html>
