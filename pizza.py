@@ -50,12 +50,30 @@ def get_topping_set(table, index):
 
 # Score a pizza given a 2d list of the score part of the sheet,
 #   the people involved in the pizza and the set of possible pizza toppings
+
+# TODO: return a score for each topping, allowing elemination of zero's and
+#           ranking of remaining toppings
 def score_pizza(topping_scores, people_idxs, topping_idxs):
     score = 0
     for person in people_idxs:
         for topping in topping_idxs:
             score += int(topping_scores[person][topping])
     return score
+
+# Returns (topping_lst, topping_idxs) with neutral toppings taken out
+def strip_toppings(topping_scores, people_idxs, topping_lst, topping_idxs):
+    new_topping_idxs = topping_idxs[:]
+
+    for topping in new_topping_idxs:
+        score = sum([int(topping_scores[person][topping]) for person in people_idxs])
+        if(score == 0):
+            index = topping_idxs.index(topping)
+            topping_idxs.remove(topping)
+            topping_lst.pop(index)
+    return (topping_lst, topping_idxs)
+
+
+
 
 # get the spreadsheet values, returns a 2d list in row-major order
 def get_values():
@@ -115,6 +133,7 @@ def get_best_pizzas(people, num_pizzas):
             for person in group:
                 topping_set = topping_set & get_topping_set(values[1:], person)
             topping_idxs = [toppings.index(x) for x in list(topping_set)]
+            topping_set, topping_idxs = strip_toppings(topping_scores, group, list(topping_set), topping_idxs)
             score += score_pizza(topping_scores, group, topping_idxs)
             group_toppings.append(zip(topping_set, topping_idxs))
 
@@ -130,7 +149,7 @@ def get_best_pizzas(people, num_pizzas):
     # sort toppings by index
     best_topping_set = [sorted(list(toppings), key = lambda x: x[1]) 
                             for toppings in best_topping_set]
-    
+
     return render_template('pizza.html', num_pizzas=num_pizzas,
                            grp_tps=zip(best_group_list, best_topping_set))
 
