@@ -25,6 +25,10 @@
     <br>
     <br>
     <table>
+        <tr>
+            <th>People</th>
+            <th>(Score) Topping</th>
+        </tr>
     {% for group, toppings in grp_tps %}
         <tr>
             <td>
@@ -38,8 +42,8 @@
             </span>
             </td>
             <td>
-            {% for topping, idx in toppings %}
-                {{ topping }}
+            {% for score, topping in toppings %}
+                ({{ score }}) {{ topping }}
                 {% if not loop.last %}
                     <br>
                 {% endif %}
@@ -53,9 +57,13 @@
         Understanding the results:
     </b></p>
     <p>
-        The toppings listed above are all of the things that the people
-        ordering the pizza like, you can (and in some cases should) only pick
-        a subset of these.
+        <b>Toppings are now listed in order from most liked to least liked.</b><br>
+        Keep in mind though, even the bottom topping is still okay with everyone.
+    </p>
+    <p>
+        The toppings listed above are all of the things that the people <br>
+        ordering the pizza like, you can (and in some cases should) only <br>
+        pick a subset of these.
     </p>
 
 </body>

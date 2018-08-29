@@ -15,6 +15,7 @@ SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 SPREADSHEET_ID = '1IJayJVNFkGPc-isqgZeqI0MaWgPXg5fTuJEBlMe4TDM'
 RANGE_NAME = 'Preferences!A1:Z35'
 
+
 # Returns all possible approximately n sized groupings of elements in lst 
 def get_groups(lst, n):
     per_list = len(lst) // n
@@ -46,34 +47,16 @@ def get_groups_helper(lst, len_list):
 # Get the acceptable set of toppings for a person with the given index
 # Currently "acceptable" == "non-negative"
 def get_topping_set(table, index):
-    return set([row[0] for row in table if int(row[index+1]) >= 0])
+    return set([i for i, row in enumerate(table) if int(row[index+1]) >= 0])
 
 # Score a pizza given a 2d list of the score part of the sheet,
 #   the people involved in the pizza and the set of possible pizza toppings
-
-# TODO: return a score for each topping, allowing elemination of zero's and
-#           ranking of remaining toppings
-def score_pizza(topping_scores, people_idxs, topping_idxs):
-    score = 0
-    for person in people_idxs:
-        for topping in topping_idxs:
-            score += int(topping_scores[person][topping])
-    return score
-
-# Returns (topping_lst, topping_idxs) with neutral toppings taken out
-def strip_toppings(topping_scores, people_idxs, topping_lst, topping_idxs):
-    new_topping_idxs = topping_idxs[:]
-
-    for topping in new_topping_idxs:
-        score = sum([int(topping_scores[person][topping]) for person in people_idxs])
-        if(score == 0):
-            index = topping_idxs.index(topping)
-            topping_idxs.remove(topping)
-            topping_lst.pop(index)
-    return (topping_lst, topping_idxs)
-
-
-
+def score_toppings(topping_values, people, toppings):
+    topping_scores = []
+    for topping in toppings:
+        topping_score = sum([int(topping_values[person][topping]) for person in people])
+        topping_scores.append((topping_score, topping))
+    return topping_scores
 
 # get the spreadsheet values, returns a 2d list in row-major order
 def get_values():
@@ -114,44 +97,50 @@ def get_best_pizzas(people, num_pizzas):
     # Generate some helpful derivative lists
     names = values[0][1:]
     toppings = [row[0] for row in values[1:]]
-    topping_scores = zip(*values[1:])[1:]
+    # strip names/topping names and flip to col(person) major order
+    topping_values = zip(*values[1:])[1:]
 
     best_score = 0
-    best_group_list = []
-    best_topping_set = []
+    best_groupset = []
+    best_toppingset = []
 
     # Iterate over all possible pizza groupings, finding the best score
-    for group_list in get_groups(p_list, num_pizzas):
-        score = 0  # overall score for this set of grouping's pizzas
-        group_toppings = []  # list of tuples representing groups toppings
+    for groupset in get_groups(p_list, num_pizzas):
+        group_score = 0  # overall score for this set of grouping's pizzas
+        toppingset = []  # list of tuples representing groups toppings
 
         # Iterate over each group in a set of groups, scoring their pizza
-        for group in group_list:
-            topping_set = set(toppings)  # start with all possible toppings
+        for group in groupset:
+            group_toppings = set(range(len(toppings)))  # start with all possible toppings
 
             # For each person, intersect their acceptable toppings
             for person in group:
-                topping_set = topping_set & get_topping_set(values[1:], person)
-            topping_idxs = [toppings.index(x) for x in list(topping_set)]
-            topping_set, topping_idxs = strip_toppings(topping_scores, group, list(topping_set), topping_idxs)
-            score += score_pizza(topping_scores, group, topping_idxs)
-            group_toppings.append(zip(topping_set, topping_idxs))
+                group_toppings = group_toppings & get_topping_set(values[1:], person)
+            group_toppings = list(group_toppings)
+
+            # Score toppings, remove neutral toppings, and sort by score
+            topping_scores = score_toppings(topping_values, group, group_toppings)
+            topping_scores = [(score, topping) for score, topping in topping_scores if score > 0]
+            topping_scores = sorted(topping_scores, key= lambda x: x[0], reverse=True)
+
+            # Add score of all toppings to group score
+            group_score += sum([score for score, topping in topping_scores])
+
+            # Convert topping indices for topping names
+            group_topping_names = [(score, toppings[idx]) for score, idx in topping_scores]
+            toppingset.append(group_topping_names)
 
         # store the result if it's the best so far
-        if(score > best_score):
-            best_score = score
-            best_group_list = group_list
-            best_topping_set = group_toppings
+        if(group_score > best_score):
+            best_score = group_score
+            best_groupset = groupset
+            best_toppingset = toppingset
 
-    # convert indexes to names
-    best_group_list = [[names[x] for x in group] for group in best_group_list]
+    # convert indices to names
+    best_groupset = [[names[x] for x in group] for group in best_groupset]
     
-    # sort toppings by index
-    best_topping_set = [sorted(list(toppings), key = lambda x: x[1]) 
-                            for toppings in best_topping_set]
-
     return render_template('pizza.html', num_pizzas=num_pizzas,
-                           grp_tps=zip(best_group_list, best_topping_set))
+                           grp_tps=zip(best_groupset, best_toppingset))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
