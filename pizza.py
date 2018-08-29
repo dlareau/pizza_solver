@@ -15,6 +15,8 @@ SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 SPREADSHEET_ID = '1IJayJVNFkGPc-isqgZeqI0MaWgPXg5fTuJEBlMe4TDM'
 RANGE_NAME = 'Preferences!A1:Z35'
 
+BASE_TOPPING_SCORE = 100 # Some impossibly large number
+BASE_TOPPING_END_INDEX = 2
 
 # Returns all possible approximately n sized groupings of elements in lst 
 def get_groups(lst, n):
@@ -55,6 +57,11 @@ def score_toppings(topping_values, people, toppings):
     topping_scores = []
     for topping in toppings:
         topping_score = sum([int(topping_values[person][topping]) for person in people])
+
+        # Base toppings are only worth 1 no matter how many people like them
+        if(topping <= BASE_TOPPING_END_INDEX):
+            topping_score = BASE_TOPPING_SCORE
+
         topping_scores.append((topping_score, topping))
     return topping_scores
 
@@ -123,8 +130,10 @@ def get_best_pizzas(people, num_pizzas):
             topping_scores = [(score, topping) for score, topping in topping_scores if score > 0]
             topping_scores = sorted(topping_scores, key= lambda x: x[0], reverse=True)
 
-            # Add score of all toppings to group score
-            group_score += sum([score for score, topping in topping_scores])
+            # Add score of all toppings to group score except base toppings
+            group_score += sum([score for score, topping in topping_scores if score != BASE_TOPPING_SCORE])
+            # Add 1 to score for each successful base topping
+            group_score += sum([1 for score, topping in topping_scores if score != BASE_TOPPING_SCORE])
 
             # Convert topping indices for topping names
             group_topping_names = [(score, toppings[idx]) for score, idx in topping_scores]

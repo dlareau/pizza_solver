@@ -43,7 +43,7 @@
             </td>
             <td>
             {% for score, topping in toppings %}
-                ({{ score }}) {{ topping }}
+                {% if score == 100 %}(x){% else %}({{ score }}){% endif %} {{ topping }}
                 {% if not loop.last %}
                     <br>
                 {% endif %}
