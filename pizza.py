@@ -91,7 +91,7 @@ def get_best_pizzas(people, num_pizzas):
     p_list = [int(x) for x in people.split(",")]
     values = get_values()
 
-    # Extend all sublists tot he same length
+    # Extend all sublists to the same length
     values = [row for row in values if len(row) > 1]
     max_len = max(len(row) for row in values)
     for row in values:
@@ -113,7 +113,7 @@ def get_best_pizzas(people, num_pizzas):
 
     # Iterate over all possible pizza groupings, finding the best score
     for groupset in get_groups(p_list, num_pizzas):
-        group_score = 0  # overall score for this set of grouping's pizzas
+        group_score = 999999999  # overall score for this set of grouping's pizzas
         toppingset = []  # list of tuples representing groups toppings
 
         # Iterate over each group in a set of groups, scoring their pizza
@@ -131,9 +131,10 @@ def get_best_pizzas(people, num_pizzas):
             topping_scores = sorted(topping_scores, key= lambda x: x[0], reverse=True)
 
             # Add score of all toppings to group score except base toppings
-            group_score += sum([score for score, topping in topping_scores if score != BASE_TOPPING_SCORE])
+            non_base_score = sum([score for score, topping in topping_scores if score != BASE_TOPPING_SCORE])
             # Add 1 to score for each successful base topping
-            group_score += sum([1 for score, topping in topping_scores if score != BASE_TOPPING_SCORE])
+            base_score = sum([1 for score, topping in topping_scores if score != BASE_TOPPING_SCORE])
+            group_score = min(group_score, base_score + non_base_score)
 
             # Convert topping indices for topping names
             group_topping_names = [(score, toppings[idx]) for score, idx in topping_scores]
