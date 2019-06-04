@@ -6,6 +6,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import itertools
 import numpy as np
 from flask import Flask, render_template
+import time
 
 app = Flask(__name__)
 
@@ -15,10 +16,43 @@ SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 SPREADSHEET_ID = '1IJayJVNFkGPc-isqgZeqI0MaWgPXg5fTuJEBlMe4TDM'
 RANGE_NAME = 'Preferences!A1:Z35'
 
-BASE_TOPPING_SCORE = 100 # Some impossibly large number
+BASE_TOPPING_SCORE = 1 # Some impossibly large number
 BASE_TOPPING_END_INDEX = 2
 
-# Returns all possible approximately n sized groupings of elements in lst 
+def r_helper(nums, groups, curr_group, num_groups, results):
+    if(nums == []):
+        results.append(copy.deepcopy(groups))
+        return
+    for num in nums[:]:
+        if(groups[curr_group] == []):
+            if(curr_group == 0):
+                if(num == 1):
+                    nums.remove(num)
+                    groups[curr_group].append(num)
+                    r_helper(nums, groups, (curr_group + 1) % num_groups, num_groups, results)
+                    del groups[curr_group][-1]
+                    nums.append(num)
+            elif(groups[curr_group - 1][0] < num):
+                nums.remove(num)
+                groups[curr_group].append(num)
+                r_helper(nums, groups, (curr_group + 1) % num_groups, num_groups, results)
+                del groups[curr_group][-1]
+                nums.append(num)
+
+        elif(num > max(groups[curr_group])):
+            nums.remove(num)
+            groups[curr_group].append(num)
+            r_helper(nums, groups, (curr_group + 1) % num_groups, num_groups, results)
+            del groups[curr_group][-1]
+            nums.append(num)
+
+
+def r(n, p):
+    results = []
+    r_helper(range(1, n + 1), [[] for x in range(p)], 0, p, results)
+    return results
+
+# Returns all possible approximately n sized groupings of elements in lst
 def get_groups(lst, n):
     per_list = len(lst) // n
     leftover = len(lst) - (n * per_list)
@@ -28,10 +62,7 @@ def get_groups(lst, n):
     for i in range(leftover):
         lengths[i] = lengths[i] + 1
 
-    # alphabetically sort names in groups
-    group_list = [sorted(groups) for groups in get_groups_helper(lst, lengths)]
-
-    return group_list
+    return get_groups_helper(lst, lengths)
 
 # Recursive helper function for get_groups.
 # len_list is a list of sizes the groups must adhere to
@@ -42,7 +73,7 @@ def get_groups_helper(lst, len_list):
         yield [tuple(lst)]
     else:
         for g in itertools.combinations(lst, len_list[0]):
-            leftover_list = list(set(lst) - set(g))
+            leftover_list = [x for x in lst if x not in g]
             for gs in get_groups_helper(leftover_list, len_list[1:]):
                 yield [tuple(g)] + gs
 
@@ -50,20 +81,6 @@ def get_groups_helper(lst, len_list):
 # Currently "acceptable" == "non-negative"
 def get_topping_set(table, index):
     return set([i for i, row in enumerate(table) if int(row[index+1]) >= 0])
-
-# Score a pizza given a 2d list of the score part of the sheet,
-#   the people involved in the pizza and the set of possible pizza toppings
-def score_toppings(topping_values, people, toppings):
-    topping_scores = []
-    for topping in toppings:
-        topping_score = sum([int(topping_values[person][topping]) for person in people])
-
-        # Base toppings are only worth 1 no matter how many people like them
-        if(topping <= BASE_TOPPING_END_INDEX):
-            topping_score = BASE_TOPPING_SCORE
-
-        topping_scores.append((topping_score, topping))
-    return topping_scores
 
 # get the spreadsheet values, returns a 2d list in row-major order
 def get_values():
@@ -104,41 +121,51 @@ def get_best_pizzas(people, num_pizzas):
     # Generate some helpful derivative lists
     names = values[0][1:]
     toppings = [row[0] for row in values[1:]]
+    topping_set = set(range(len(toppings)))
+    person_topping_sets = [get_topping_set(values[1:], i) for i in range(len(names))]
     # strip names/topping names and flip to col(person) major order
     topping_values = zip(*values[1:])[1:]
+    topping_values = np.asarray(topping_values).astype(int)
 
     best_score = 0
     best_groupset = []
     best_toppingset = []
 
+    print("Getting groups")
+    memo_dict = {}
+    start = time.time()
+
+    i = 0
     # Iterate over all possible pizza groupings, finding the best score
     for groupset in get_groups(p_list, num_pizzas):
+        i += 1
+        if(i % 100000 == 0):
+            print(i)
         group_score = 999999999  # overall score for this set of grouping's pizzas
         toppingset = []  # list of tuples representing groups toppings
 
         # Iterate over each group in a set of groups, scoring their pizza
         for group in groupset:
-            group_toppings = set(range(len(toppings)))  # start with all possible toppings
+            if(group in memo_dict):
+                total_score, topping_scores = memo_dict[group]
+            else:
+                group_toppings = topping_set.copy()  # start with all possible toppings
 
-            # For each person, intersect their acceptable toppings
-            for person in group:
-                group_toppings = group_toppings & get_topping_set(values[1:], person)
-            group_toppings = list(group_toppings)
+                # For each person, intersect their acceptable toppings
+                for person in group:
+                    group_toppings = group_toppings & person_topping_sets[person]
+                group_toppings = list(group_toppings)
 
-            # Score toppings, remove neutral toppings, and sort by score
-            topping_scores = score_toppings(topping_values, group, group_toppings)
-            topping_scores = [(score, topping) for score, topping in topping_scores if score > 0]
-            topping_scores = sorted(topping_scores, key= lambda x: x[0], reverse=True)
+                # Score toppings, remove neutral toppings, and sort by score
 
-            # Add score of all toppings to group score except base toppings
-            non_base_score = sum([score for score, topping in topping_scores if score != BASE_TOPPING_SCORE])
-            # Add 1 to score for each successful base topping
-            base_score = sum([1 for score, topping in topping_scores if score != BASE_TOPPING_SCORE])
-            group_score = min(group_score, base_score + non_base_score)
+                topping_scores = np.sum(topping_values[group, :][:, group_toppings], axis=0)
+                topping_scores = zip(topping_scores.tolist(), group_toppings)
 
-            # Convert topping indices for topping names
-            group_topping_names = [(score, toppings[idx]) for score, idx in topping_scores]
-            toppingset.append(group_topping_names)
+                total_score = sum([score for score, topping in topping_scores])
+                memo_dict[group] = (total_score, topping_scores)
+            group_score = min(group_score, total_score)
+
+            toppingset.append(topping_scores)
 
         # store the result if it's the best so far
         if(group_score > best_score):
@@ -146,11 +173,16 @@ def get_best_pizzas(people, num_pizzas):
             best_groupset = groupset
             best_toppingset = toppingset
 
+    end = time.time()
+    print("Checked groups in %f seconds" % (end-start))
     # convert indices to names
     best_groupset = [[names[x] for x in group] for group in best_groupset]
-    
+    best_toppingset = [[(score, toppings[idx]) for score, idx in t_scores if score > 0] for t_scores in best_toppingset]
+    best_toppingset = [sorted(t_scores, key=lambda x: x[0], reverse=True) for t_scores in best_toppingset]
+
     return render_template('pizza.html', num_pizzas=num_pizzas,
                            grp_tps=zip(best_groupset, best_toppingset))
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
