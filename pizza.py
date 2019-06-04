@@ -7,6 +7,7 @@ import itertools
 import numpy as np
 from flask import Flask, render_template
 import time
+import math
 
 app = Flask(__name__)
 
@@ -19,63 +20,67 @@ RANGE_NAME = 'Preferences!A1:Z35'
 BASE_TOPPING_SCORE = 1 # Some impossibly large number
 BASE_TOPPING_END_INDEX = 2
 
-def r_helper(nums, groups, curr_group, num_groups, results):
+
+# # Returns all possible approximately n sized groupings of elements in lst
+# def get_groups(lst, n):
+#     per_list = len(lst) // n
+#     leftover = len(lst) - (n * per_list)
+#     lengths = [per_list] * n
+
+#     # Spread leftovers over the first few groups
+#     for i in range(leftover):
+#         lengths[i] = lengths[i] + 1
+
+#     return get_groups_helper(lst, lengths)
+
+# # Recursive helper function for get_groups.
+# # len_list is a list of sizes the groups must adhere to
+# # assumes len(lst) == sum(len_list)
+# def get_groups_helper(lst, len_list):
+#     # Base case, if there is only one group left to make, return the list
+#     if len(len_list) == 1:
+#         yield [tuple(lst)]
+#     else:
+#         for g in itertools.combinations(lst, len_list[0]):
+#             leftover_list = [x for x in lst if x not in g]
+#             for gs in get_groups_helper(leftover_list, len_list[1:]):
+#                 yield [tuple(g)] + gs
+
+def r_helper(nums, group, curr_index, num_people, group_size, results):
     if(nums == []):
-        results.append(copy.deepcopy(groups))
+        results.append(group[:])
         return
-    for num in nums[:]:
-        if(groups[curr_group] == []):
-            if(curr_group == 0):
-                if(num == 1):
-                    nums.remove(num)
-                    groups[curr_group].append(num)
-                    r_helper(nums, groups, (curr_group + 1) % num_groups, num_groups, results)
-                    del groups[curr_group][-1]
-                    nums.append(num)
-            elif(groups[curr_group - 1][0] < num):
-                nums.remove(num)
-                groups[curr_group].append(num)
-                r_helper(nums, groups, (curr_group + 1) % num_groups, num_groups, results)
-                del groups[curr_group][-1]
-                nums.append(num)
-
-        elif(num > max(groups[curr_group])):
-            nums.remove(num)
-            groups[curr_group].append(num)
-            r_helper(nums, groups, (curr_group + 1) % num_groups, num_groups, results)
-            del groups[curr_group][-1]
-            nums.append(num)
-
-
-def r(n, p):
-    results = []
-    r_helper(range(1, n + 1), [[] for x in range(p)], 0, p, results)
-    return results
-
-# Returns all possible approximately n sized groupings of elements in lst
-def get_groups(lst, n):
-    per_list = len(lst) // n
-    leftover = len(lst) - (n * per_list)
-    lengths = [per_list] * n
-
-    # Spread leftovers over the first few groups
-    for i in range(leftover):
-        lengths[i] = lengths[i] + 1
-
-    return get_groups_helper(lst, lengths)
-
-# Recursive helper function for get_groups.
-# len_list is a list of sizes the groups must adhere to
-# assumes len(lst) == sum(len_list)
-def get_groups_helper(lst, len_list):
-    # Base case, if there is only one group left to make, return the list
-    if len(len_list) == 1:
-        yield [tuple(lst)]
+    if(group[curr_index] != -1):
+        curr_index = group.index(-1)
+    if(curr_index % group_size == 0):
+        for num in nums:
+            if(num > group[curr_index - group_size]):
+                new_nums = nums[:]
+                new_nums.remove(num)
+                group[curr_index] = num
+                r_helper(new_nums, group, (curr_index + 1) % num_people, num_people, group_size, results)
+            else:
+                group[curr_index] = -1
+                return
     else:
-        for g in itertools.combinations(lst, len_list[0]):
-            leftover_list = [x for x in lst if x not in g]
-            for gs in get_groups_helper(leftover_list, len_list[1:]):
-                yield [tuple(g)] + gs
+        for num in nums:
+            if(num > group[curr_index - 1]):
+                new_nums = nums[:]
+                new_nums.remove(num)
+                group[curr_index] = num
+                r_helper(new_nums, group, (curr_index + 1) % num_people, num_people, group_size, results)
+            else:
+                group[curr_index] = -1
+                return
+    group[curr_index] = -1
+
+
+def get_groups(lst, p):
+    results = []
+    n = len(lst)
+    group_size = int(math.ceil(n / float(p)))
+    r_helper(sorted(lst, reverse=True)[:-1], [min(lst)] + [-1]*(n-1), 1, n, group_size, results)
+    return [[tuple(result[i * group_size:(i + 1) * group_size]) for i in range((len(result) + group_size - 1) // group_size)] for result in results]
 
 # Get the acceptable set of toppings for a person with the given index
 # Currently "acceptable" == "non-negative"
