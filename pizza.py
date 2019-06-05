@@ -51,9 +51,14 @@ def r_helper(nums, group, curr_index, num_people, group_size):
 def get_groups(lst, p):
     n = len(lst)
     group_size = int(math.ceil(n / float(p)))
-    results = r_helper(sorted(lst, reverse=True)[:-1], [min(lst)] + [-1]*(n-1), 1, n, group_size)
-    r_lst = ([tuple(result[i * group_size:(i + 1) * group_size]) for i in range((len(result) + group_size - 1) // group_size)] for result in results)
-    return r_lst
+    num_leftovers = p - (n - p * (n // p))
+    starting_group = [min(lst)] + [-1]*(n-1)
+    for i in range(num_leftovers):
+        starting_group.insert(((i+1)*group_size)-1, -2)
+    results = r_helper(sorted(lst, reverse=True)[:-1], starting_group, 1, n, group_size)
+    results = ([result[i * group_size:(i + 1) * group_size] for i in range((len(result) + group_size - 1) // group_size)] for result in results)
+    results = ([tuple([x for x in group if x != -2]) for group in result] for result in results)
+    return results
 
 
 # Get the acceptable set of toppings for a person with the given index
