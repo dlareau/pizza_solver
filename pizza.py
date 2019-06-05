@@ -51,7 +51,7 @@ def r_helper(nums, group, curr_index, num_people, group_size):
 def get_groups(lst, p):
     n = len(lst)
     group_size = int(math.ceil(n / float(p)))
-    num_leftovers = p - (n - p * (n // p))
+    num_leftovers = (p - (n - p * (n // p))) % p
     starting_group = [min(lst)] + [-1]*(n-1)
     for i in range(num_leftovers):
         starting_group.insert(((i+1)*group_size)-1, -2)
