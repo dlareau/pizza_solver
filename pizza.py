@@ -1,9 +1,7 @@
 from __future__ import print_function
 from googleapiclient.discovery import build
 from httplib2 import Http
-from oauth2client import file, client, tools
 from oauth2client.service_account import ServiceAccountCredentials
-import itertools
 import numpy as np
 from flask import Flask, render_template
 import time
@@ -17,38 +15,11 @@ SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 SPREADSHEET_ID = '1IJayJVNFkGPc-isqgZeqI0MaWgPXg5fTuJEBlMe4TDM'
 RANGE_NAME = 'Preferences!A1:Z35'
 
-BASE_TOPPING_SCORE = 1 # Some impossibly large number
 BASE_TOPPING_END_INDEX = 2
 
-
-# # Returns all possible approximately n sized groupings of elements in lst
-# def get_groups(lst, n):
-#     per_list = len(lst) // n
-#     leftover = len(lst) - (n * per_list)
-#     lengths = [per_list] * n
-
-#     # Spread leftovers over the first few groups
-#     for i in range(leftover):
-#         lengths[i] = lengths[i] + 1
-
-#     return get_groups_helper(lst, lengths)
-
-# # Recursive helper function for get_groups.
-# # len_list is a list of sizes the groups must adhere to
-# # assumes len(lst) == sum(len_list)
-# def get_groups_helper(lst, len_list):
-#     # Base case, if there is only one group left to make, return the list
-#     if len(len_list) == 1:
-#         yield [tuple(lst)]
-#     else:
-#         for g in itertools.combinations(lst, len_list[0]):
-#             leftover_list = [x for x in lst if x not in g]
-#             for gs in get_groups_helper(leftover_list, len_list[1:]):
-#                 yield [tuple(g)] + gs
-
-def r_helper(nums, group, curr_index, num_people, group_size, results):
+def r_helper(nums, group, curr_index, num_people, group_size):
     if(nums == []):
-        results.append(group[:])
+        yield group[:]
         return
     if(group[curr_index] != -1):
         curr_index = group.index(-1)
@@ -58,7 +29,8 @@ def r_helper(nums, group, curr_index, num_people, group_size, results):
                 new_nums = nums[:]
                 new_nums.remove(num)
                 group[curr_index] = num
-                r_helper(new_nums, group, (curr_index + 1) % num_people, num_people, group_size, results)
+                for x in r_helper(new_nums, group, (curr_index + 1) % num_people, num_people, group_size):
+                    yield x
             else:
                 group[curr_index] = -1
                 return
@@ -68,7 +40,8 @@ def r_helper(nums, group, curr_index, num_people, group_size, results):
                 new_nums = nums[:]
                 new_nums.remove(num)
                 group[curr_index] = num
-                r_helper(new_nums, group, (curr_index + 1) % num_people, num_people, group_size, results)
+                for x in r_helper(new_nums, group, (curr_index + 1) % num_people, num_people, group_size):
+                    yield x
             else:
                 group[curr_index] = -1
                 return
@@ -76,16 +49,18 @@ def r_helper(nums, group, curr_index, num_people, group_size, results):
 
 
 def get_groups(lst, p):
-    results = []
     n = len(lst)
     group_size = int(math.ceil(n / float(p)))
-    r_helper(sorted(lst, reverse=True)[:-1], [min(lst)] + [-1]*(n-1), 1, n, group_size, results)
-    return [[tuple(result[i * group_size:(i + 1) * group_size]) for i in range((len(result) + group_size - 1) // group_size)] for result in results]
+    results = r_helper(sorted(lst, reverse=True)[:-1], [min(lst)] + [-1]*(n-1), 1, n, group_size)
+    r_lst = ([tuple(result[i * group_size:(i + 1) * group_size]) for i in range((len(result) + group_size - 1) // group_size)] for result in results)
+    return r_lst
+
 
 # Get the acceptable set of toppings for a person with the given index
 # Currently "acceptable" == "non-negative"
 def get_topping_set(table, index):
     return set([i for i, row in enumerate(table) if int(row[index+1]) >= 0])
+
 
 # get the spreadsheet values, returns a 2d list in row-major order
 def get_values():
@@ -100,12 +75,14 @@ def get_values():
 
     return values
 
+
 # index page, show the names from the sheet
 @app.route("/")
 def show_selection():
     values = get_values()
     names = enumerate(values[0][1:])
     return render_template('index.html', names=names)
+
 
 # pizza solver page, solve for the best pizzas and display them
 @app.route("/solve/<people>/<int:num_pizzas>")
@@ -136,16 +113,24 @@ def get_best_pizzas(people, num_pizzas):
     best_groupset = []
     best_toppingset = []
 
-    print("Getting groups")
+    pred_1 = (float(math.factorial(len(p_list)))/float(math.factorial(num_pizzas)))
+    pred_2 = math.pow(math.gamma(float(len(p_list))/float(num_pizzas) + 1), num_pizzas)
+
+    print("Expecting %d pizzas." % (pred_1/pred_2))
+
     memo_dict = {}
+    g_list = get_groups(p_list, num_pizzas)
+
     start = time.time()
 
     i = 0
     # Iterate over all possible pizza groupings, finding the best score
-    for groupset in get_groups(p_list, num_pizzas):
+    for groupset in g_list:
         i += 1
         if(i % 100000 == 0):
             print(i)
+            if(i == 500000):
+                break
         group_score = 999999999  # overall score for this set of grouping's pizzas
         toppingset = []  # list of tuples representing groups toppings
 
@@ -182,7 +167,14 @@ def get_best_pizzas(people, num_pizzas):
     print("Checked groups in %f seconds" % (end-start))
     # convert indices to names
     best_groupset = [[names[x] for x in group] for group in best_groupset]
-    best_toppingset = [[(score, toppings[idx]) for score, idx in t_scores if score > 0] for t_scores in best_toppingset]
+    best_toppingset = [[(score, toppings[idx], idx) for score, idx in t_scores if (score > 0 or idx <= BASE_TOPPING_END_INDEX)] for t_scores in best_toppingset]
+    for i in range(len(best_toppingset)):
+        for j in range(len(best_toppingset[i])):
+            (score, topping, idx) = best_toppingset[i][j]
+            if(idx <= BASE_TOPPING_END_INDEX):
+                best_toppingset[i][j] = (100, topping)
+            else:
+                best_toppingset[i][j] = (score, topping)
     best_toppingset = [sorted(t_scores, key=lambda x: x[0], reverse=True) for t_scores in best_toppingset]
 
     return render_template('pizza.html', num_pizzas=num_pizzas,
