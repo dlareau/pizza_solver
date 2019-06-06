@@ -4,8 +4,8 @@ from httplib2 import Http
 from oauth2client.service_account import ServiceAccountCredentials
 import numpy as np
 from flask import Flask, render_template
+from math import factorial, gamma, ceil, pow
 import time
-import math
 
 app = Flask(__name__)
 
@@ -16,55 +16,87 @@ SPREADSHEET_ID = '1IJayJVNFkGPc-isqgZeqI0MaWgPXg5fTuJEBlMe4TDM'
 RANGE_NAME = 'Preferences!A1:Z35'
 
 BASE_TOPPING_END_INDEX = 2
+RED_SAUCE = 0
+WHITE_SAUCE = 1
 
-def r_helper(nums, group, curr_index, num_people, group_size):
+
+def get_groups_helper(nums, group, curr_index, num_people, group_size):
+    # Base case for the recursion
     if(nums == []):
         yield group[:]
         return
+
+    # Skip over already filled spots and blanks
     if(group[curr_index] != -1):
         curr_index = group.index(-1)
+
+    # We iterate over the numbers in nums recursing if they fit the constraints
     if(curr_index % group_size == 0):
         for num in nums:
+            # Constraint 1: groups[i][0] < groups[i+1][0]
             if(num > group[curr_index - group_size]):
                 new_nums = nums[:]
                 new_nums.remove(num)
                 group[curr_index] = num
-                for x in r_helper(new_nums, group, (curr_index + 1) % num_people, num_people, group_size):
+
+                # This loop/yield combo is to allow for recursive generators
+                for x in get_groups_helper(new_nums, group, (curr_index + 1) % num_people,
+                                           num_people, group_size):
                     yield x
             else:
                 group[curr_index] = -1
                 return
     else:
         for num in nums:
+            # Constraint 2: groups[i][j] < groups[i][j+1]
             if(num > group[curr_index - 1]):
                 new_nums = nums[:]
                 new_nums.remove(num)
                 group[curr_index] = num
-                for x in r_helper(new_nums, group, (curr_index + 1) % num_people, num_people, group_size):
+
+                # This loop/yield combo is to allow for recursive generators
+                for x in get_groups_helper(new_nums, group, (curr_index + 1) % num_people,
+                                           num_people, group_size):
                     yield x
             else:
                 group[curr_index] = -1
                 return
+
     group[curr_index] = -1
 
 
+# Sets up for the recursive helper function
 def get_groups(lst, p):
     n = len(lst)
-    group_size = int(math.ceil(n / float(p)))
-    num_leftovers = (p - (n - p * (n // p))) % p
+    group_size = int(ceil(n / float(p)))
+
+    # The minimum element goes first
     starting_group = [min(lst)] + [-1]*(n-1)
+
+    # Add in spacers to get it up to an even multiple of p
+    num_leftovers = (group_size * p) - n
     for i in range(num_leftovers):
-        starting_group.insert(((i+1)*group_size)-1, -2)
-    results = r_helper(sorted(lst, reverse=True)[:-1], starting_group, 1, n, group_size)
-    results = ([result[i * group_size:(i + 1) * group_size] for i in range((len(result) + group_size - 1) // group_size)] for result in results)
+        starting_group.insert(((i + 1) * group_size) - 1, -2)
+
+    new_lst = sorted(lst, reverse=True)[:-1]
+
+    # Initial call to recursive helper
+    results = get_groups_helper(new_lst, starting_group, 1, n, group_size)
+
+    # For each result, regroup the groups (yeah... this is messy)
+    results = ([result[i * group_size:(i + 1) * group_size]
+               for i in range((len(result) + group_size - 1) // group_size)]
+               for result in results)
+
+    # Make each group a tuple and remove spacers
     results = ([tuple([x for x in group if x != -2]) for group in result] for result in results)
     return results
 
 
-# Get the acceptable set of toppings for a person with the given index
+# Get the acceptable set of toppings for a given person
 # Currently "acceptable" == "non-negative"
-def get_topping_set(table, index):
-    return set([i for i, row in enumerate(table) if int(row[index+1]) >= 0])
+def get_topping_set(table, person):
+    return set([i for i, row in enumerate(table) if int(row[person+1]) >= 0])
 
 
 # get the spreadsheet values, returns a 2d list in row-major order
@@ -110,59 +142,66 @@ def get_best_pizzas(people, num_pizzas):
     toppings = [row[0] for row in values[1:]]
     topping_set = set(range(len(toppings)))
     person_topping_sets = [get_topping_set(values[1:], i) for i in range(len(names))]
+
     # strip names/topping names and flip to col(person) major order
     topping_values = zip(*values[1:])[1:]
     topping_values = np.asarray(topping_values).astype(int)
 
+    # Some initialization for looping elements
+    loop_index = 0
+    memo_dict = {}
     best_score = 0
     best_groupset = []
     best_toppingset = []
 
-    pred_1 = (float(math.factorial(len(p_list)))/float(math.factorial(num_pizzas)))
-    pred_2 = math.pow(math.gamma(float(len(p_list))/float(num_pizzas) + 1), num_pizzas)
-
-    print("Expecting %d pizzas." % (pred_1/pred_2))
-
-    memo_dict = {}
-    g_list = get_groups(p_list, num_pizzas)
+    # Predict the number of pizzas, maybe to be used later for time estimate
+    pred_1 = (float(factorial(len(p_list)))/float(factorial(num_pizzas)))
+    pred_2 = pow(gamma(float(len(p_list))/float(num_pizzas) + 1), num_pizzas)
+    pred = int(pred_1/pred_2)
+    print("Expecting %s pizzas." % "{:,}".format(pred))
 
     start = time.time()
 
-    i = 0
     # Iterate over all possible pizza groupings, finding the best score
-    for groupset in g_list:
-        i += 1
-        if(i % 100000 == 0):
-            print(i)
-            if(i == 500000):
-                break
-        group_score = 999999999  # overall score for this set of grouping's pizzas
+    for groupset in get_groups(p_list, num_pizzas):
+        loop_index += 1
+
+        # Only check 500,000 groups for time reasons
+        if(loop_index == 500000):
+            break
+
+        group_score = 999999999  # overall score for this set of groups pizzas
         toppingset = []  # list of tuples representing groups toppings
 
         # Iterate over each group in a set of groups, scoring their pizza
         for group in groupset:
             if(group in memo_dict):
+                # If the answer is stored for this group already, use that
                 total_score, topping_scores = memo_dict[group]
+
             else:
-                group_toppings = topping_set.copy()  # start with all possible toppings
+                group_toppings = topping_set.copy()  # start with all toppings
 
                 # For each person, intersect their acceptable toppings
                 for person in group:
                     group_toppings = group_toppings & person_topping_sets[person]
                 group_toppings = list(group_toppings)
-                        
-                # Score toppings, remove neutral toppings, and sort by score
 
+                # Score toppings, remove neutral toppings, and sort by score
                 topping_scores = np.sum(topping_values[group, :][:, group_toppings], axis=0)
                 topping_scores = zip(topping_scores.tolist(), group_toppings)
-                
-                if(0 not in group_toppings and 1 not in group_toppings):
-                    total_score = 0;
+
+                # Heavily encourage a pizza to have a sauce
+                if(RED_SAUCE not in group_toppings and WHITE_SAUCE not in group_toppings):
+                    total_score = 1
                 else:
                     total_score = sum([score for score, topping in topping_scores])
-                memo_dict[group] = (total_score, topping_scores)
-            group_score = min(group_score, total_score)
 
+                # Save group info for future calls
+                memo_dict[group] = (total_score, topping_scores)
+
+            # The algorithm tries to maximize the minimum pizza not the sum
+            group_score = min(group_score, total_score)
             toppingset.append(topping_scores)
 
         # store the result if it's the best so far
@@ -172,10 +211,18 @@ def get_best_pizzas(people, num_pizzas):
             best_toppingset = toppingset
 
     end = time.time()
-    print("Checked groups in %f seconds" % (end-start))
+    total_time = end-start
+    print("Checked groups in %f seconds" % (total_time))
+
     # convert indices to names
     best_groupset = [[names[x] for x in group] for group in best_groupset]
-    best_toppingset = [[(score, toppings[idx], idx) for score, idx in t_scores if (score > 0 or idx <= BASE_TOPPING_END_INDEX)] for t_scores in best_toppingset]
+
+    # Remove toppings with a score of 0 unless they are base toppings
+    best_toppingset = [[(score, toppings[idx], idx)
+                       for score, idx in t_scores if (score > 0 or idx <= BASE_TOPPING_END_INDEX)]
+                       for t_scores in best_toppingset]
+
+    # Replace base topping scores with sentinel values for display purposes
     for i in range(len(best_toppingset)):
         for j in range(len(best_toppingset[i])):
             (score, topping, idx) = best_toppingset[i][j]
@@ -183,10 +230,13 @@ def get_best_pizzas(people, num_pizzas):
                 best_toppingset[i][j] = (100, topping)
             else:
                 best_toppingset[i][j] = (score, topping)
-    best_toppingset = [sorted(t_scores, key=lambda x: x[0], reverse=True) for t_scores in best_toppingset]
 
-    return render_template('pizza.html', num_pizzas=num_pizzas,
-                           grp_tps=zip(best_groupset, best_toppingset))
+    # Sort the toppings from most to least liked
+    best_toppingset = [sorted(ts, key=lambda x: x[0], reverse=True) for ts in best_toppingset]
+
+    return render_template('pizza.html', num_pizzas=num_pizzas, time=("%.3f" % total_time),
+                           grp_tps=zip(best_groupset, best_toppingset),
+                           num_possible="{:,}".format(pred), num_checked="{:,}".format(loop_index))
 
 
 if __name__ == '__main__':
