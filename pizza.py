@@ -150,13 +150,16 @@ def get_best_pizzas(people, num_pizzas):
                 for person in group:
                     group_toppings = group_toppings & person_topping_sets[person]
                 group_toppings = list(group_toppings)
-
+                        
                 # Score toppings, remove neutral toppings, and sort by score
 
                 topping_scores = np.sum(topping_values[group, :][:, group_toppings], axis=0)
                 topping_scores = zip(topping_scores.tolist(), group_toppings)
-
-                total_score = sum([score for score, topping in topping_scores])
+                
+                if(0 not in group_toppings and 1 not in group_toppings):
+                    total_score = 0;
+                else:
+                    total_score = sum([score for score, topping in topping_scores])
                 memo_dict[group] = (total_score, topping_scores)
             group_score = min(group_score, total_score)
 
