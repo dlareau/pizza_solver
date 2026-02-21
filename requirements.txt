@@ -1,0 +1,4 @@
+Django>=4.2,<7.0
+django-allauth>=0.57.0
+pulp>=2.7
+

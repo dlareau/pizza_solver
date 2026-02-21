@@ -1,0 +1,60 @@
+{% extends "webapp/base.html" %}
+{% block title %}New Pizza Order{% endblock %}
+
+{% block content %}
+<h1>New Pizza Order</h1>
+
+<form method="post">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+  <ul class="errorlist">
+    {% for error in form.non_field_errors %}
+    <li>{{ error }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="form-group">
+    <label for="{{ form.vendor.id_for_label }}">{{ form.vendor.label }}</label>
+    {{ form.vendor }}
+    {% if form.vendor.errors %}<ul class="errorlist">{% for e in form.vendor.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label for="{{ form.host.id_for_label }}">{{ form.host.label }}</label>
+    {{ form.host }}
+    {% if form.host.errors %}<ul class="errorlist">{% for e in form.host.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label>{{ form.people.label }}</label>
+    <ul class="checkbox-list">
+      {% for choice in form.people %}
+      <li>{{ choice }}</li>
+      {% endfor %}
+    </ul>
+    {% if form.people.errors %}<ul class="errorlist">{% for e in form.people.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label for="{{ form.num_pizzas.id_for_label }}">{{ form.num_pizzas.label }}</label>
+    {{ form.num_pizzas }}
+    {% if form.num_pizzas.errors %}<ul class="errorlist">{% for e in form.num_pizzas.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label for="{{ form.pizza_mode.id_for_label }}">{{ form.pizza_mode.label }}</label>
+    {{ form.pizza_mode }}
+    {% if form.pizza_mode.errors %}<ul class="errorlist">{% for e in form.pizza_mode.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+
+  <div class="form-group">
+    <label for="{{ form.optimization_mode.id_for_label }}">{{ form.optimization_mode.label }}</label>
+    {{ form.optimization_mode }}
+    {% if form.optimization_mode.errors %}<ul class="errorlist">{% for e in form.optimization_mode.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+
+  <button type="submit">Generate Pizza Order</button>
+</form>
+{% endblock %}
