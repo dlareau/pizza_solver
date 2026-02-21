@@ -1,0 +1,39 @@
+{% extends "webapp/base.html" %}
+{% block title %}{{ action }} Topping{% endblock %}
+
+{% block content %}
+<h1 class="title">{{ action }} Topping</h1>
+
+<form method="post" style="max-width: 480px;">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+  <div class="notification is-danger is-light">
+    {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="field">
+    <label class="label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+    <div class="control">
+      <input class="input{% if form.name.errors %} is-danger{% endif %}"
+             type="text"
+             name="{{ form.name.html_name }}"
+             id="{{ form.name.id_for_label }}"
+             value="{{ form.name.value|default:'' }}">
+    </div>
+    {% if form.name.errors %}
+    <p class="help is-danger">{% for e in form.name.errors %}{{ e }}{% endfor %}</p>
+    {% endif %}
+  </div>
+
+  <div class="field is-grouped">
+    <div class="control">
+      <button class="button is-primary" type="submit">{{ action }}</button>
+    </div>
+    <div class="control">
+      <a class="button is-light" href="{% url 'topping_list' %}">Cancel</a>
+    </div>
+  </div>
+</form>
+{% endblock %}

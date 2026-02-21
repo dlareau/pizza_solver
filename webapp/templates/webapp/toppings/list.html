@@ -1,0 +1,37 @@
+{% extends "webapp/base.html" %}
+{% block title %}Toppings{% endblock %}
+
+{% block content %}
+<div class="level">
+  <div class="level-left">
+    <h1 class="title level-item">Toppings</h1>
+  </div>
+  <div class="level-right">
+    <a class="button is-primary level-item" href="{% url 'topping_create' %}">Add Topping</a>
+  </div>
+</div>
+
+{% if toppings %}
+<table class="table is-fullwidth is-striped is-hoverable">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for topping in toppings %}
+    <tr>
+      <td>{{ topping.name }}</td>
+      <td>
+        <a class="button is-small is-warning" href="{% url 'topping_edit' topping.pk %}">Edit</a>
+        <a class="button is-small is-danger" href="{% url 'topping_delete' topping.pk %}">Delete</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="notification is-light">No toppings yet. <a href="{% url 'topping_create' %}">Add one!</a></div>
+{% endif %}
+{% endblock %}

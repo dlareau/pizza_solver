@@ -117,8 +117,15 @@ class CreateOrderViewTests(TestCase):
         self.client = Client()
         self.topping = Topping.objects.create(name="Pepperoni")
         self.vendor = make_vendor(toppings=[self.topping])
+        from webapp.models import User
+        self.user = User.objects.create_user(
+            username='alice', email='alice@test.com', password='testpass',
+        )
         self.alice = make_person("Alice")
+        self.alice.user_account = self.user
+        self.alice.save()
         self.bob = make_person("Bob")
+        self.client.force_login(self.user)
 
     def test_get_create_order_returns_200(self):
         response = self.client.get(reverse('create_order'))
@@ -133,7 +140,6 @@ class CreateOrderViewTests(TestCase):
     def test_post_valid_form_creates_order_and_redirects(self):
         response = self.client.post(reverse('create_order'), data={
             'vendor': self.vendor.pk,
-            'host': self.alice.pk,
             'people': [self.alice.pk, self.bob.pk],
             'num_pizzas': 1,
             'pizza_mode': 'whole',
@@ -143,22 +149,22 @@ class CreateOrderViewTests(TestCase):
         self.assertIn('/results/', response['Location'])
         self.assertEqual(Order.objects.count(), 1)
 
-    def test_host_not_in_people_shows_error(self):
+    def test_host_auto_added_to_people(self):
+        # Alice is host (logged-in user) but not explicitly in people; she should be auto-included.
         response = self.client.post(reverse('create_order'), data={
             'vendor': self.vendor.pk,
-            'host': self.alice.pk,
-            'people': [self.bob.pk],  # alice is host but not in people
+            'people': [self.bob.pk],
             'num_pizzas': 1,
             'pizza_mode': 'whole',
             'optimization_mode': 'maximize_likes',
         })
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "host must be included")
+        self.assertEqual(response.status_code, 302)
+        order = Order.objects.get()
+        self.assertIn(self.alice, order.people.all())
 
     def test_more_pizzas_than_people_shows_error(self):
         response = self.client.post(reverse('create_order'), data={
             'vendor': self.vendor.pk,
-            'host': self.alice.pk,
             'people': [self.alice.pk],
             'num_pizzas': 5,
             'pizza_mode': 'whole',

@@ -1,56 +1,77 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Pizza Solver{% endblock %}</title>
-  <style>
-    body { font-family: sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
-    h1, h2 { border-bottom: 2px solid #c0392b; padding-bottom: 0.3rem; }
-    nav { margin-bottom: 1.5rem; }
-    nav a { margin-right: 1rem; color: #c0392b; text-decoration: none; font-weight: bold; }
-    nav a:hover { text-decoration: underline; }
-    .messages { list-style: none; padding: 0; }
-    .messages li { padding: 0.6rem 1rem; margin-bottom: 0.5rem; border-radius: 4px; }
-    .messages li.success { background: #d4edda; color: #155724; }
-    .messages li.warning { background: #fff3cd; color: #856404; }
-    .messages li.error   { background: #f8d7da; color: #721c24; }
-    .form-group { margin-bottom: 1rem; }
-    .form-group label { display: block; font-weight: bold; margin-bottom: 0.25rem; }
-    .form-group select, .form-group input[type=number] {
-      width: 100%; max-width: 360px; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px;
-    }
-    .form-group .errorlist { color: #c0392b; list-style: none; padding: 0; font-size: 0.875rem; }
-    .checkbox-list { list-style: none; padding: 0; }
-    .checkbox-list li { margin: 0.2rem 0; }
-    button[type=submit] {
-      background: #c0392b; color: #fff; border: none; padding: 0.6rem 1.4rem;
-      border-radius: 4px; cursor: pointer; font-size: 1rem;
-    }
-    button[type=submit]:hover { background: #a93226; }
-    .pizza-card {
-      border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-bottom: 1rem;
-    }
-    .pizza-card h3 { margin: 0 0 0.5rem; }
-    .half-split { display: flex; gap: 1rem; }
-    .half-split .half { flex: 1; background: #f9f9f9; padding: 0.6rem; border-radius: 4px; }
-    .tag { display: inline-block; background: #eee; border-radius: 3px; padding: 0.1rem 0.4rem; margin: 0.1rem; font-size: 0.85rem; }
-  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
-  <nav>
-    <a href="{% url 'create_order' %}">New Order</a>
-    <a href="/admin/">Admin</a>
-  </nav>
 
-  {% if messages %}
-  <ul class="messages">
+<nav class="navbar is-light" style="border-bottom: 2px solid #dbdbdb;" role="navigation" aria-label="main navigation">
+  <div class="navbar-brand">
+    <a class="navbar-item has-text-weight-bold" href="/">Pizza Solver</a>
+    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMenu">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </a>
+  </div>
+  <div id="navbarMenu" class="navbar-menu">
+    <div class="navbar-start">
+      <a class="navbar-item" href="{% url 'create_order' %}">New Order</a>
+      {% if user.is_authenticated %}
+      <a class="navbar-item" href="{% url 'topping_list' %}">Toppings</a>
+      <a class="navbar-item" href="{% url 'vendor_list' %}">Vendors</a>
+      {% endif %}
+    </div>
+    <div class="navbar-end">
+      {% if user.is_authenticated %}
+      <div class="navbar-item">
+        <span class="has-text-grey">{{ user.email }}</span>
+      </div>
+      <div class="navbar-item">
+        <a class="button is-primary is-outlined is-small" href="{% url 'account_logout' %}">Log out</a>
+      </div>
+      {% else %}
+      <div class="navbar-item">
+        <a class="button is-primary is-outlined is-small" href="{% url 'account_login' %}">Log in</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+
+{% if messages %}
+<section class="section pt-4 pb-0">
+  <div class="container">
     {% for msg in messages %}
-    <li class="{{ msg.tags }}">{{ msg }}</li>
+    <div class="notification {% if 'success' in msg.tags %}is-success{% elif 'warning' in msg.tags %}is-warning{% elif 'error' in msg.tags %}is-danger{% else %}is-info{% endif %} is-light">
+      {{ msg }}
+    </div>
     {% endfor %}
-  </ul>
-  {% endif %}
+  </div>
+</section>
+{% endif %}
 
-  {% block content %}{% endblock %}
+<section class="section">
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+</section>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const burger = document.querySelector('.navbar-burger');
+    if (burger) {
+      const menu = document.getElementById(burger.dataset.target);
+      burger.addEventListener('click', () => {
+        burger.classList.toggle('is-active');
+        menu.classList.toggle('is-active');
+      });
+    }
+  });
+</script>
 </body>
 </html>

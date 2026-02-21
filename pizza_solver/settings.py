@@ -63,7 +63,7 @@ ROOT_URLCONF = 'pizza_solver.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -152,9 +152,10 @@ ACCOUNT_EMAIL_VERIFICATION = 'optional'  # 'mandatory', 'optional', or 'none'
 
 # Rate limiting for login attempts
 ACCOUNT_RATE_LIMITS = {
-    'login_failed': '5/m/300',  # 5 attempts per minute, 300 second timeout
+    'login_failed': '5/m',  # 5 failed attempts per minute
 }
 
 # URLs
 LOGIN_REDIRECT_URL = '/'
 ACCOUNT_LOGOUT_REDIRECT_URL = '/'
+LOGIN_URL = '/accounts/login/'

@@ -1,0 +1,39 @@
+{% extends "webapp/base.html" %}
+{% block title %}Vendors{% endblock %}
+
+{% block content %}
+<div class="level">
+  <div class="level-left">
+    <h1 class="title level-item">Vendors</h1>
+  </div>
+  <div class="level-right">
+    <a class="button is-primary level-item" href="{% url 'vendor_create' %}">Add Vendor</a>
+  </div>
+</div>
+
+{% if vendors %}
+<table class="table is-fullwidth is-striped is-hoverable">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Toppings</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for vendor in vendors %}
+    <tr>
+      <td>{{ vendor.name }}</td>
+      <td>{{ vendor.toppings.count }}</td>
+      <td>
+        <a class="button is-small is-warning" href="{% url 'vendor_edit' vendor.pk %}">Edit</a>
+        <a class="button is-small is-danger" href="{% url 'vendor_delete' vendor.pk %}">Delete</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="notification is-light">No vendors yet. <a href="{% url 'vendor_create' %}">Add one!</a></div>
+{% endif %}
+{% endblock %}

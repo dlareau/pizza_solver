@@ -1,5 +1,6 @@
 from django import forms
-from .models import Order, Person, PizzaVendor
+from django.forms import CheckboxSelectMultiple, ModelMultipleChoiceField
+from .models import Order, Person, PizzaVendor, Topping
 
 
 class CreateOrderForm(forms.Form):
@@ -7,11 +8,6 @@ class CreateOrderForm(forms.Form):
         queryset=PizzaVendor.objects.all(),
         label="Pizza Vendor",
         empty_label="-- Select a vendor --",
-    )
-    host = forms.ModelChoiceField(
-        queryset=Person.objects.all(),
-        label="Host (your name)",
-        empty_label="-- Select host --",
     )
     people = forms.ModelMultipleChoiceField(
         queryset=Person.objects.all(),
@@ -34,16 +30,41 @@ class CreateOrderForm(forms.Form):
         initial='maximize_likes',
     )
 
+    def __init__(self, *args, host=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.host = host
+
     def clean(self):
         cleaned = super().clean()
-        host = cleaned.get('host')
         people = cleaned.get('people')
         num_pizzas = cleaned.get('num_pizzas')
 
-        if host and people is not None and host not in people:
-            self.add_error('people', "The host must be included in the list of people.")
-
-        if num_pizzas and people is not None and num_pizzas > len(people):
-            self.add_error('num_pizzas', "Cannot have more pizzas than people.")
+        if num_pizzas and people is not None and self.host:
+            effective_count = len(set(people) | {self.host})
+            if num_pizzas > effective_count:
+                self.add_error('num_pizzas', "Cannot have more pizzas than people.")
 
         return cleaned
+
+
+class ToppingForm(forms.ModelForm):
+    class Meta:
+        model = Topping
+        fields = ['name']
+
+
+class VendorForm(forms.ModelForm):
+    toppings = ModelMultipleChoiceField(
+        queryset=Topping.objects.all(),
+        required=False,
+        widget=CheckboxSelectMultiple,
+    )
+
+    class Meta:
+        model = PizzaVendor
+        fields = ['name']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields['toppings'].initial = self.instance.toppings.values_list('pk', flat=True)

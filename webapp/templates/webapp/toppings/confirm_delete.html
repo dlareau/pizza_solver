@@ -1,0 +1,23 @@
+{% extends "webapp/base.html" %}
+{% block title %}Delete Topping{% endblock %}
+
+{% block content %}
+<h1 class="title">Delete Topping</h1>
+
+<div class="box" style="max-width:480px;">
+  <p class="mb-4">Are you sure you want to delete the topping <strong>{{ topping.name }}</strong>?
+    This cannot be undone.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="field is-grouped">
+      <div class="control">
+        <button class="button is-danger" type="submit">Delete</button>
+      </div>
+      <div class="control">
+        <a class="button is-light" href="{% url 'topping_list' %}">Cancel</a>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

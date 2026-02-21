@@ -2,68 +2,70 @@
 {% block title %}Order #{{ order.id }} Results{% endblock %}
 
 {% block content %}
-<h1>Order #{{ order.id }} Results</h1>
+<h1 class="title">Order #{{ order.id }} Results</h1>
 
-<p>
-  <strong>Vendor:</strong> {{ order.vendor }}<br>
-  <strong>Host:</strong> {{ order.host }}<br>
-  <strong>Mode:</strong> {{ order.get_pizza_mode_display }} &mdash; {{ order.get_optimization_mode_display }}<br>
-  <strong>Pizzas ordered:</strong> {{ order.num_pizzas }}<br>
-  <strong>Participants:</strong>
-  {% for person in order.people.all %}{{ person }}{% if not forloop.last %}, {% endif %}{% endfor %}
-</p>
+<div class="content">
+  <p>
+    <strong>Vendor:</strong> {{ order.vendor }}<br>
+    <strong>Host:</strong> {{ order.host }}<br>
+    <strong>Mode:</strong> {{ order.get_pizza_mode_display }} &mdash; {{ order.get_optimization_mode_display }}<br>
+    <strong>Pizzas ordered:</strong> {{ order.num_pizzas }}<br>
+    <strong>Participants:</strong>
+    {% for person in order.people.all %}{{ person }}{% if not forloop.last %}, {% endif %}{% endfor %}
+  </p>
+</div>
 
 {% if pizzas %}
-<h2>Pizza Assignments</h2>
+<h2 class="subtitle is-4">Pizza Assignments</h2>
 {% for pizza in pizzas %}
-<div class="pizza-card">
-  <h3>Pizza #{{ forloop.counter }}</h3>
-
-  {% if order.pizza_mode == 'half' %}
-  <div class="half-split">
-    <div class="half">
-      <strong>Left half &mdash; toppings:</strong><br>
-      {% for t in pizza.left_toppings.all %}
-        <span class="tag">{{ t }}</span>
-      {% empty %}
-        <em>none</em>
-      {% endfor %}
-    </div>
-    <div class="half">
-      <strong>Right half &mdash; toppings:</strong><br>
-      {% for t in pizza.right_toppings.all %}
-        <span class="tag">{{ t }}</span>
-      {% empty %}
-        <em>none</em>
-      {% endfor %}
-    </div>
+<div class="card mb-4">
+  <div class="card-header">
+    <p class="card-header-title">Pizza #{{ forloop.counter }}</p>
   </div>
-  {% else %}
-  <p>
-    <strong>Toppings:</strong>
-    {% for t in pizza.left_toppings.all %}
-      <span class="tag">{{ t }}</span>
-    {% empty %}
-      <em>none</em>
-    {% endfor %}
-  </p>
-  {% endif %}
+  <div class="card-content">
+    {% if order.pizza_mode == 'half' %}
+    <div class="columns is-mobile">
+      <div class="column">
+        <p><strong>Left half &mdash; toppings:</strong></p>
+        {% for t in pizza.left_toppings.all %}
+          <span class="tag is-warning">{{ t }}</span>
+        {% empty %}
+          <em>none</em>
+        {% endfor %}
+      </div>
+      <div class="column">
+        <p><strong>Right half &mdash; toppings:</strong></p>
+        {% for t in pizza.right_toppings.all %}
+          <span class="tag is-info">{{ t }}</span>
+        {% empty %}
+          <em>none</em>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <p>
+      <strong>Toppings:</strong>
+      {% for t in pizza.left_toppings.all %}
+        <span class="tag is-warning">{{ t }}</span>
+      {% empty %}
+        <em>none</em>
+      {% endfor %}
+    </p>
+    {% endif %}
 
-  <p>
-    <strong>People:</strong>
-    {% for person in pizza.people.all %}{{ person }}{% if not forloop.last %}, {% endif %}{% endfor %}
-  </p>
+    <p class="mt-2">
+      <strong>People:</strong>
+      {% for person in pizza.people.all %}{{ person }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    </p>
+  </div>
 </div>
 {% endfor %}
 
 {% else %}
-<p>
-  No pizza assignments have been generated yet.
-  {% if perms.webapp %}
-    You can create assignments manually via the <a href="/admin/webapp/orderedpizza/add/">admin</a>.
-  {% endif %}
-</p>
+<div class="notification is-light">
+  <p>No pizza assignments have been generated yet.</p>
+</div>
 {% endif %}
 
-<p><a href="{% url 'create_order' %}">&larr; Create another order</a></p>
+<p><a class="button is-light mt-2" href="{% url 'create_order' %}">&larr; Create another order</a></p>
 {% endblock %}

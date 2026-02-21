@@ -1,0 +1,19 @@
+{% for field in attrs.form %}
+  {% if not field.is_hidden %}
+  <div class="field">
+    {% if field.field.widget.input_type == 'checkbox' %}
+    <div class="control">
+      <label class="checkbox">{{ field }} {{ field.label }}</label>
+    </div>
+    {% else %}
+    <label class="label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+    <div class="control">{{ field }}</div>
+    {% endif %}
+    {% if field.errors %}
+    <p class="help is-danger">{% for e in field.errors %}{{ e }}{% endfor %}</p>
+    {% endif %}
+  </div>
+  {% else %}
+  {{ field }}
+  {% endif %}
+{% endfor %}

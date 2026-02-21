@@ -1,0 +1,10 @@
+{% load allauth %}
+<div class="allauth-inner" style="max-width:480px;">
+<form method="{{ attrs.method }}"
+      {% if attrs.action %}action="{{ attrs.action }}"{% endif %}>
+    {% slot body %}
+    {% endslot %}
+    {% slot actions %}
+    {% endslot %}
+</form>
+</div>
