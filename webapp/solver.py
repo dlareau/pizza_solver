@@ -28,6 +28,8 @@ Pizza mode semantics:
     group of people, right_toppings to the right group.
 """
 
+import math
+
 import pulp
 
 from .models import Order, OrderedPizza, PersonToppingPreference
@@ -135,9 +137,11 @@ def solve_whole(order: Order) -> list[OrderedPizza]:
     for k in range(K):
         prob += pulp.lpSum(tv[t, k] for t in range(T)) <= 3, f"topping_cap_{k}"
 
-    # 4. At least 1 person per pizza
+    # 4. Balanced assignment: each pizza gets floor(P/K) or ceil(P/K) people
+    lo, hi = P // K, math.ceil(P / K)
     for k in range(K):
-        prob += pulp.lpSum(x[p, k] for p in range(P)) >= 1, f"pizza_{k}_nonempty"
+        prob += pulp.lpSum(x[p, k] for p in range(P)) >= lo, f"pizza_{k}_lo"
+        prob += pulp.lpSum(x[p, k] for p in range(P)) <= hi, f"pizza_{k}_hi"
 
     # 5. Linearization constraints: z[p,t,k] = x[p,k] AND tv[t,k]
     for p in range(P):
@@ -241,10 +245,12 @@ def solve_half(order: Order) -> list[OrderedPizza]:
         prob += pulp.lpSum(t_left[t, k] for t in range(T)) <= 3, f"cap_l_{k}"
         prob += pulp.lpSum(t_right[t, k] for t in range(T)) <= 3, f"cap_r_{k}"
 
-    # 5. At least 1 person per pizza
+    # 5. Balanced assignment: each pizza gets floor(P/K) or ceil(P/K) people
+    lo, hi = P // K, math.ceil(P / K)
     for k in range(K):
-        prob += (pulp.lpSum(x_left[p, k] + x_right[p, k] for p in range(P)) >= 1,
-                 f"pizza_{k}_nonempty")
+        total = pulp.lpSum(x_left[p, k] + x_right[p, k] for p in range(P))
+        prob += total >= lo, f"pizza_{k}_lo"
+        prob += total <= hi, f"pizza_{k}_hi"
 
     # 6. Linearization (left and right halves)
     for p in range(P):
