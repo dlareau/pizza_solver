@@ -1,0 +1,70 @@
+{% extends "webapp/base.html" %}
+
+{% block title %}Import Toppings & Vendors{% endblock %}
+
+{% block content %}
+<h1 class="title">Import Toppings &amp; Vendors</h1>
+
+{% if results %}
+<div class="notification is-success is-light">
+  <strong>Import complete!</strong><br>
+  Toppings created: {{ results.toppings_created }}, already existed: {{ results.toppings_existed }}<br>
+  Vendors created: {{ results.vendors_created }}, already existed: {{ results.vendors_existed }}
+</div>
+{% endif %}
+
+{% if warnings %}
+<div class="notification is-warning is-light">
+  <strong>Warnings:</strong>
+  <ul>
+    {% for w in warnings %}
+    <li>{{ w }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="box">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="field">
+      <label class="label">{{ form.file.label }}</label>
+      <div class="control">
+        {{ form.file }}
+      </div>
+      {% if form.file.errors %}
+      <p class="help is-danger">{{ form.file.errors }}</p>
+      {% endif %}
+    </div>
+    <div class="field">
+      <div class="control">
+        <button class="button is-primary" type="submit">Upload</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<details>
+  <summary class="has-text-weight-semibold" style="cursor:pointer;">Expected file format</summary>
+  <div class="content mt-3">
+    <pre># Lines starting with # are comments and are ignored.
+# Blank lines are also ignored.
+
+[toppings]
+Pepperoni
+Mushrooms
+Cheese
+
+[vendors]
+Pizza Palace: Pepperoni, Mushrooms
+Tony's Pizza: Cheese
+A Vendor With No Toppings</pre>
+    <ul>
+      <li><code>[toppings]</code> section: one topping name per line.</li>
+      <li><code>[vendors]</code> section: <code>Vendor Name: Topping1, Topping2, ...</code> — the colon and topping list are optional.</li>
+      <li>Toppings referenced in <code>[vendors]</code> that don't exist yet are created automatically.</li>
+      <li>Re-importing the same file is safe (idempotent).</li>
+    </ul>
+  </div>
+</details>
+{% endblock %}

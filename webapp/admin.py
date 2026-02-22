@@ -70,8 +70,8 @@ class VendorToppingAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'host', 'vendor', 'num_pizzas', 'pizza_mode', 'optimization_mode', 'created_at')
-    list_filter = ('vendor', 'pizza_mode', 'optimization_mode', 'created_at')
+    list_display = ('id', 'host', 'vendor', 'num_pizzas', 'optimization_mode', 'created_at')
+    list_filter = ('vendor', 'optimization_mode', 'created_at')
     search_fields = ('host__name', 'host__email', 'vendor__name')
     filter_horizontal = ('people',)
     date_hierarchy = 'created_at'
@@ -81,4 +81,4 @@ class OrderAdmin(admin.ModelAdmin):
 class OrderedPizzaAdmin(admin.ModelAdmin):
     list_display = ('id', 'order')
     list_filter = ('order__vendor',)
-    filter_horizontal = ('left_toppings', 'right_toppings', 'people')
+    filter_horizontal = ('toppings', 'people')

@@ -1,0 +1,38 @@
+{% extends "webapp/base.html" %}
+{% block title %}Merge Topping{% endblock %}
+
+{% block content %}
+<h1 class="title">Merge Topping</h1>
+
+<div class="notification is-warning is-light">
+  <strong>{{ topping.name }}</strong> will be deleted. All references to it (vendor menus,
+  person preferences, pizza orders) will be re-pointed to the topping you choose below.
+  If a conflict exists (e.g. the same vendor already offers the target topping), the
+  duplicate is simply dropped.
+</div>
+
+<div class="box">
+  <form method="post">
+    {% csrf_token %}
+    <div class="field">
+      <label class="label">{{ form.target.label }}</label>
+      <div class="control">
+        <div class="select">
+          {{ form.target }}
+        </div>
+      </div>
+      {% if form.target.errors %}
+      <p class="help is-danger">{{ form.target.errors }}</p>
+      {% endif %}
+    </div>
+    <div class="field is-grouped">
+      <div class="control">
+        <button class="button is-danger" type="submit">Merge &amp; Delete "{{ topping.name }}"</button>
+      </div>
+      <div class="control">
+        <a class="button is-light" href="{% url 'topping_list' %}">Cancel</a>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

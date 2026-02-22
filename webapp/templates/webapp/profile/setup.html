@@ -1,0 +1,39 @@
+{% extends "webapp/base.html" %}
+{% block title %}Set Up Your Preferences{% endblock %}
+
+{% block content %}
+<h1 class="title">Set Up Your Preferences</h1>
+<p class="subtitle">Enter your email address to get started.</p>
+
+<form method="post" style="max-width: 480px;">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+  <div class="notification is-danger is-light">
+    {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="field">
+    <label class="label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+    <div class="control">
+      <input class="input{% if form.email.errors %} is-danger{% endif %}"
+             type="email"
+             name="{{ form.email.html_name }}"
+             id="{{ form.email.id_for_label }}"
+             value="{{ form.email.value|default:'' }}"
+             placeholder="you@example.com"
+             autofocus>
+    </div>
+    {% if form.email.errors %}
+    <p class="help is-danger">{% for e in form.email.errors %}{{ e }}{% endfor %}</p>
+    {% endif %}
+  </div>
+
+  <div class="field">
+    <div class="control">
+      <button class="button is-primary" type="submit">Continue</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

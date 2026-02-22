@@ -1,0 +1,14 @@
+{% extends "webapp/base.html" %}
+{% block title %}Check Your Email{% endblock %}
+
+{% block content %}
+<h1 class="title">Check Your Email</h1>
+<div class="box" style="max-width: 480px;">
+  <p class="mb-3">
+    We sent a login link to <strong>{{ email }}</strong>.
+  </p>
+  <p class="has-text-grey">
+    Click the link in the email to set your pizza preferences. The link works on any device.
+  </p>
+</div>
+{% endblock %}

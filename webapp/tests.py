@@ -31,10 +31,10 @@ def make_person(name, unrated_is_dislike=False, prefs=None):
     return p
 
 
-def make_order(vendor, host, people, num_pizzas=1, pizza_mode='whole', optimization_mode='maximize_likes'):
+def make_order(vendor, host, people, num_pizzas=1, optimization_mode='maximize_likes'):
     order = Order.objects.create(
         host=host, vendor=vendor,
-        num_pizzas=num_pizzas, pizza_mode=pizza_mode,
+        num_pizzas=num_pizzas,
         optimization_mode=optimization_mode,
     )
     order.people.set(people)
@@ -84,7 +84,6 @@ class OrderModelTests(TestCase):
     def test_order_defaults(self):
         order = Order.objects.create(host=self.person, vendor=self.vendor)
         self.assertEqual(order.num_pizzas, 1)
-        self.assertEqual(order.pizza_mode, 'whole')
         self.assertEqual(order.optimization_mode, 'maximize_likes')
 
     def test_order_str(self):
@@ -142,7 +141,7 @@ class CreateOrderViewTests(TestCase):
             'vendor': self.vendor.pk,
             'people': [self.alice.pk, self.bob.pk],
             'num_pizzas': 1,
-            'pizza_mode': 'whole',
+
             'optimization_mode': 'maximize_likes',
         })
         self.assertEqual(response.status_code, 302)
@@ -155,7 +154,7 @@ class CreateOrderViewTests(TestCase):
             'vendor': self.vendor.pk,
             'people': [self.bob.pk],
             'num_pizzas': 1,
-            'pizza_mode': 'whole',
+
             'optimization_mode': 'maximize_likes',
         })
         self.assertEqual(response.status_code, 302)
@@ -167,7 +166,7 @@ class CreateOrderViewTests(TestCase):
             'vendor': self.vendor.pk,
             'people': [self.alice.pk],
             'num_pizzas': 5,
-            'pizza_mode': 'whole',
+
             'optimization_mode': 'maximize_likes',
         })
         self.assertEqual(response.status_code, 200)
@@ -196,7 +195,7 @@ class OrderResultsViewTests(TestCase):
     def test_results_page_shows_pizza_when_assigned(self):
         pizza = OrderedPizza.objects.create(order=self.order)
         pizza.people.set([self.alice])
-        pizza.left_toppings.set([self.topping])
+        pizza.toppings.set([self.topping])
         url = reverse('order_results', kwargs={'order_id': self.order.pk})
         response = self.client.get(url)
         self.assertContains(response, "Pizza #1")
@@ -227,12 +226,12 @@ class SolverTests(TestCase):
         vendor = make_vendor(toppings=[t_pep, t_mush])
         alice = make_person("Alice", prefs={t_pep: PersonToppingPreference.ALLERGY})
         bob = make_person("Bob", prefs={t_pep: PersonToppingPreference.LIKE})
-        order = make_order(vendor, alice, [alice, bob], num_pizzas=1, pizza_mode='whole')
+        order = make_order(vendor, alice, [alice, bob], num_pizzas=1)
 
         pizzas = solve(order)
 
         for pizza in pizzas:
-            left_top_ids = set(pizza.left_toppings.values_list('id', flat=True))
+            left_top_ids = set(pizza.toppings.values_list('id', flat=True))
             for person in pizza.people.all():
                 allergies = PersonToppingPreference.objects.filter(
                     person=person,
@@ -244,26 +243,6 @@ class SolverTests(TestCase):
                         f"{person.name} is on a pizza with their allergen"
                     )
 
-    def test_allergy_never_violated_half(self):
-        """Allergy constraint respected in half mode."""
-        t_pep, t_mush = self._make_toppings("Pepperoni2", "Mushroom2")
-        vendor = make_vendor(name="Half Vendor", toppings=[t_pep, t_mush])
-        alice = make_person("AliceH", prefs={t_pep: PersonToppingPreference.ALLERGY})
-        bob = make_person("BobH", prefs={t_pep: PersonToppingPreference.LIKE})
-        order = make_order(vendor, alice, [alice, bob], num_pizzas=1, pizza_mode='half')
-
-        pizzas = solve(order)
-
-        for pizza in pizzas:
-            left_ids = set(pizza.left_toppings.values_list('id', flat=True))
-            right_ids = set(pizza.right_toppings.values_list('id', flat=True))
-            for person in pizza.people.all():
-                allergies = list(PersonToppingPreference.objects.filter(
-                    person=person, preference=PersonToppingPreference.ALLERGY,
-                ).values_list('topping_id', flat=True))
-                for allergen_id in allergies:
-                    self.assertNotIn(allergen_id, left_ids | right_ids)
-
     # --- test_topping_cap ---
 
     def test_topping_cap(self):
@@ -271,27 +250,12 @@ class SolverTests(TestCase):
         tops = self._make_toppings("A", "B", "C", "D", "E")
         vendor = make_vendor(name="Cap Vendor", toppings=tops)
         alice = make_person("AliceCap", prefs={t: PersonToppingPreference.LIKE for t in tops})
-        order = make_order(vendor, alice, [alice], num_pizzas=1, pizza_mode='whole')
+        order = make_order(vendor, alice, [alice], num_pizzas=1)
 
         pizzas = solve(order)
 
         for pizza in pizzas:
-            self.assertLessEqual(pizza.left_toppings.count(), 3)
-            self.assertLessEqual(pizza.right_toppings.count(), 3)
-
-    def test_topping_cap_half(self):
-        """Topping cap applies per half in half mode."""
-        tops = self._make_toppings("H1", "H2", "H3", "H4", "H5")
-        vendor = make_vendor(name="Cap Half Vendor", toppings=tops)
-        alice = make_person("AliceCapH", prefs={t: PersonToppingPreference.LIKE for t in tops})
-        bob = make_person("BobCapH", prefs={t: PersonToppingPreference.LIKE for t in tops})
-        order = make_order(vendor, alice, [alice, bob], num_pizzas=1, pizza_mode='half')
-
-        pizzas = solve(order)
-
-        for pizza in pizzas:
-            self.assertLessEqual(pizza.left_toppings.count(), 3)
-            self.assertLessEqual(pizza.right_toppings.count(), 3)
+            self.assertLessEqual(pizza.toppings.count(), 3)
 
     # --- test_every_person_assigned ---
 
@@ -340,8 +304,8 @@ class SolverTests(TestCase):
         pizzas = solve(order)
 
         self.assertEqual(len(pizzas), 1)
-        left_ids = set(pizzas[0].left_toppings.values_list('id', flat=True))
-        self.assertIn(t_like.id, left_ids, "Liked topping should be on the pizza")
+        topping_ids = set(pizzas[0].toppings.values_list('id', flat=True))
+        self.assertIn(t_like.id, topping_ids, "Liked topping should be on the pizza")
 
     # --- test_minimize_dislikes_balances_scores ---
 
@@ -367,30 +331,12 @@ class SolverTests(TestCase):
         # Each person gets their preferred topping, not the one they dislike
         for pizza in pizzas_md:
             person = pizza.people.first()
-            topping_ids = set(pizza.left_toppings.values_list('id', flat=True))
+            topping_ids = set(pizza.toppings.values_list('id', flat=True))
             dislikes = set(PersonToppingPreference.objects.filter(
                 person=person, preference=PersonToppingPreference.DISLIKE
             ).values_list('topping_id', flat=True))
             self.assertTrue(topping_ids.isdisjoint(dislikes),
                             f"{person.name} has a disliked topping on their pizza")
-
-    # --- test_whole_bonus_prevents_unnecessary_split ---
-
-    def test_whole_bonus_prevents_unnecessary_split(self):
-        """Solver should keep pizza whole when splitting adds no benefit."""
-        t1, = self._make_toppings("BonusTop")
-        vendor = make_vendor(name="Bonus Vendor", toppings=[t1])
-        # Both people like the same topping — no reason to split
-        alice = make_person("AliceBonus", prefs={t1: PersonToppingPreference.LIKE})
-        bob = make_person("BobBonus", prefs={t1: PersonToppingPreference.LIKE})
-        order = make_order(vendor, alice, [alice, bob], num_pizzas=1, pizza_mode='half')
-
-        pizzas = solve(order)
-
-        self.assertEqual(len(pizzas), 1)
-        # Pizza should not be split: right_toppings empty, all people on left
-        self.assertEqual(pizzas[0].right_toppings.count(), 0,
-                         "Pizza should not be split when everyone likes same toppings")
 
     # --- test_unrated_is_dislike_excludes_unrated_toppings ---
 
@@ -406,7 +352,7 @@ class SolverTests(TestCase):
         pizzas = solve(order)
 
         self.assertEqual(len(pizzas), 1)
-        left_ids = set(pizzas[0].left_toppings.values_list('id', flat=True))
+        left_ids = set(pizzas[0].toppings.values_list('id', flat=True))
         self.assertNotIn(t_unrated.id, left_ids,
                          "Unrated topping should be excluded when unrated_is_dislike=True")
 
@@ -428,6 +374,6 @@ class SolverTests(TestCase):
         pizzas = solve(order)
 
         self.assertEqual(len(pizzas), 1)
-        left_ids = set(pizzas[0].left_toppings.values_list('id', flat=True))
+        left_ids = set(pizzas[0].toppings.values_list('id', flat=True))
         self.assertIn(t_unrated.id, left_ids,
                       "Liked topping should appear on pizza")

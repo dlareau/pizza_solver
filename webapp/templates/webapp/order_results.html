@@ -8,7 +8,7 @@
   <p>
     <strong>Vendor:</strong> {{ order.vendor }}<br>
     <strong>Host:</strong> {{ order.host }}<br>
-    <strong>Mode:</strong> {{ order.get_pizza_mode_display }} &mdash; {{ order.get_optimization_mode_display }}<br>
+    <strong>Mode:</strong> {{ order.get_optimization_mode_display }}<br>
     <strong>Pizzas ordered:</strong> {{ order.num_pizzas }}<br>
     <strong>Participants:</strong>
     {% for person in order.people.all %}{{ person }}{% if not forloop.last %}, {% endif %}{% endfor %}
@@ -23,35 +23,14 @@
     <p class="card-header-title">Pizza #{{ forloop.counter }}</p>
   </div>
   <div class="card-content">
-    {% if pizza.is_split %}
-    <div class="columns is-mobile">
-      <div class="column">
-        <p><strong>Left half &mdash; toppings:</strong></p>
-        {% for t in pizza.left_toppings.all %}
-          <span class="tag is-warning">{{ t }}</span>
-        {% empty %}
-          <em>none</em>
-        {% endfor %}
-      </div>
-      <div class="column">
-        <p><strong>Right half &mdash; toppings:</strong></p>
-        {% for t in pizza.right_toppings.all %}
-          <span class="tag is-info">{{ t }}</span>
-        {% empty %}
-          <em>none</em>
-        {% endfor %}
-      </div>
-    </div>
-    {% else %}
     <p>
       <strong>Toppings:</strong>
-      {% for t in pizza.left_toppings.all %}
+      {% for t in pizza.toppings.all %}
         <span class="tag is-warning">{{ t }}</span>
       {% empty %}
         <em>none</em>
       {% endfor %}
     </p>
-    {% endif %}
 
     <p class="mt-2">
       <strong>People:</strong>

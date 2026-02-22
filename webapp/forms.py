@@ -19,11 +19,6 @@ class CreateOrderForm(forms.Form):
         label="Number of pizzas",
         initial=1,
     )
-    pizza_mode = forms.ChoiceField(
-        choices=Order.PIZZA_MODE_CHOICES,
-        label="Pizza mode",
-        initial='whole',
-    )
     optimization_mode = forms.ChoiceField(
         choices=Order.OPTIMIZATION_MODE_CHOICES,
         label="Optimization strategy",
@@ -45,6 +40,35 @@ class CreateOrderForm(forms.Form):
                 self.add_error('num_pizzas', "Cannot have more pizzas than people.")
 
         return cleaned
+
+
+class ImportForm(forms.Form):
+    file = forms.FileField(label="Import file (.txt)")
+
+
+class MergeToppingForm(forms.Form):
+    target = forms.ModelChoiceField(
+        queryset=Topping.objects.none(),
+        label="Merge into",
+        empty_label="-- Select target topping --",
+    )
+
+    def __init__(self, *args, exclude_pk=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = Topping.objects.order_by('name')
+        if exclude_pk is not None:
+            qs = qs.exclude(pk=exclude_pk)
+        self.fields['target'].queryset = qs
+
+
+class GuestSetupForm(forms.Form):
+    email = forms.EmailField(label="Your email address")
+
+
+class PersonProfileForm(forms.ModelForm):
+    class Meta:
+        model = Person
+        fields = ['name', 'email', 'unrated_is_dislike']
 
 
 class ToppingForm(forms.ModelForm):

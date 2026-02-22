@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
@@ -33,6 +35,8 @@ class Person(models.Model):
         help_text="Optional link to user account if this person has registered"
     )
     
+    guest_token = models.UUIDField(default=uuid.uuid4, unique=True)
+
     unrated_is_dislike = models.BooleanField(
         default=False,
         help_text="If True, toppings with no recorded preference are treated as Dislike (-1) during optimization."
@@ -109,10 +113,6 @@ class VendorTopping(models.Model):
 
 class Order(models.Model):
     """Represents a pizza order."""
-    PIZZA_MODE_CHOICES = [
-        ('whole', 'Whole pizzas only'),
-        ('half', 'Half-and-half allowed'),
-    ]
     OPTIMIZATION_MODE_CHOICES = [
         ('maximize_likes', 'Maximize Likes'),
         ('minimize_dislikes', 'Minimize Dislikes'),
@@ -122,10 +122,6 @@ class Order(models.Model):
     vendor = models.ForeignKey(PizzaVendor, on_delete=models.CASCADE, related_name='orders')
     people = models.ManyToManyField(Person, related_name='orders')
     num_pizzas = models.IntegerField(default=1, help_text="Number of pizzas to order")
-    pizza_mode = models.CharField(
-        max_length=5, choices=PIZZA_MODE_CHOICES, default='whole',
-        help_text="Whether half-and-half pizzas are allowed"
-    )
     optimization_mode = models.CharField(
         max_length=20, choices=OPTIMIZATION_MODE_CHOICES, default='maximize_likes',
         help_text="Which optimization strategy to use"
@@ -139,16 +135,10 @@ class Order(models.Model):
 
 
 class OrderedPizza(models.Model):
-    """Represents an individual pizza within an order.
-
-    For whole-mode orders, only left_toppings is used.
-    For half-mode orders, left_toppings = left half, right_toppings = right half.
-    """
+    """Represents an individual pizza within an order."""
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='pizzas')
-    left_toppings = models.ManyToManyField(Topping, related_name='pizzas_as_left_topping', blank=True)
-    right_toppings = models.ManyToManyField(Topping, related_name='pizzas_as_right_topping', blank=True)
+    toppings = models.ManyToManyField(Topping, related_name='pizzas', blank=True)
     people = models.ManyToManyField(Person, related_name='ordered_pizzas')
-    is_split = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Pizza #{self.id} - Order #{self.order.id}"

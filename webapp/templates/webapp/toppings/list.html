@@ -25,6 +25,7 @@
       <td>{{ topping.name }}</td>
       <td>
         <a class="button is-small is-warning" href="{% url 'topping_edit' topping.pk %}">Edit</a>
+        <a class="button is-small is-info" href="{% url 'topping_merge' topping.pk %}">Merge</a>
         <a class="button is-small is-danger" href="{% url 'topping_delete' topping.pk %}">Delete</a>
       </td>
     </tr>

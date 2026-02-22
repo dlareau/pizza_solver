@@ -1,0 +1,11 @@
+Hi,
+
+Someone (probably you) requested access to set pizza topping preferences on Pizza Solver.
+
+Click the link below to log in and set your preferences:
+
+{{ magic_url }}
+
+This link will work on any device. If you did not request this, you can safely ignore this email.
+
+— Pizza Solver

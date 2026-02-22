@@ -155,6 +155,8 @@ ACCOUNT_RATE_LIMITS = {
     'login_failed': '5/m',  # 5 failed attempts per minute
 }
 
+ACCOUNT_ADAPTER = 'webapp.adapters.ProfileRedirectAdapter'
+
 # URLs
 LOGIN_REDIRECT_URL = '/'
 ACCOUNT_LOGOUT_REDIRECT_URL = '/'

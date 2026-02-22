@@ -24,6 +24,9 @@
       {% if user.is_authenticated %}
       <a class="navbar-item" href="{% url 'topping_list' %}">Toppings</a>
       <a class="navbar-item" href="{% url 'vendor_list' %}">Vendors</a>
+      {% if user.is_staff %}
+      <a class="navbar-item" href="{% url 'import_data' %}">Import</a>
+      {% endif %}
       {% endif %}
     </div>
     <div class="navbar-end">

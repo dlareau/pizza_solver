@@ -108,12 +108,11 @@ class Command(BaseCommand):
             bulk = []
             for topping_name in topping_names:
                 value = PREFERENCES[topping_name][p_idx]
-                if value != 0:  # skip neutrals
-                    bulk.append(PREF(
-                        person=person,
-                        topping=toppings[topping_name],
-                        preference=value,
-                    ))
+                bulk.append(PREF(
+                    person=person,
+                    topping=toppings[topping_name],
+                    preference=value,
+                ))
             PREF.objects.bulk_create(bulk)
 
         self.stdout.write(f"  Created {len(PEOPLE)} people with preferences.")
