@@ -296,6 +296,8 @@ def solve_half(order: Order) -> list[OrderedPizza]:
         pizza.people.set(left_people + right_people)
         pizza.left_toppings.set([toppings[t] for t in range(T) if t_left[t, k].value() > 0.5])
         pizza.right_toppings.set([toppings[t] for t in range(T) if t_right[t, k].value() > 0.5])
+        pizza.is_split = is_split[k].value() > 0.5
+        pizza.save()
         result.append(pizza)
 
     return result

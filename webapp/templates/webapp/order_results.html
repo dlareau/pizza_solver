@@ -23,7 +23,7 @@
     <p class="card-header-title">Pizza #{{ forloop.counter }}</p>
   </div>
   <div class="card-content">
-    {% if order.pizza_mode == 'half' %}
+    {% if pizza.is_split %}
     <div class="columns is-mobile">
       <div class="column">
         <p><strong>Left half &mdash; toppings:</strong></p>

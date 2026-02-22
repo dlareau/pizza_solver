@@ -148,6 +148,7 @@ class OrderedPizza(models.Model):
     left_toppings = models.ManyToManyField(Topping, related_name='pizzas_as_left_topping', blank=True)
     right_toppings = models.ManyToManyField(Topping, related_name='pizzas_as_right_topping', blank=True)
     people = models.ManyToManyField(Person, related_name='ordered_pizzas')
+    is_split = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Pizza #{self.id} - Order #{self.order.id}"
