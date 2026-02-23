@@ -2,10 +2,10 @@
 {% block title %}Set Up Your Preferences{% endblock %}
 
 {% block content %}
-<h1 class="title">Set Up Your Preferences</h1>
-<p class="subtitle">Enter your email address to get started.</p>
+<h1 class="title">Welcome! Set Your Preferences</h1>
+<p class="subtitle">Tell us how you feel about pizza toppings so we can find the best pizza for everyone.</p>
 
-<form method="post" style="max-width: 480px;">
+<form method="post" action="?setup=1" style="max-width: 680px;">
   {% csrf_token %}
 
   {% if form.non_field_errors %}
@@ -15,24 +15,42 @@
   {% endif %}
 
   <div class="field">
-    <label class="label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+    <label class="label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
     <div class="control">
-      <input class="input{% if form.email.errors %} is-danger{% endif %}"
-             type="email"
-             name="{{ form.email.html_name }}"
-             id="{{ form.email.id_for_label }}"
-             value="{{ form.email.value|default:'' }}"
-             placeholder="you@example.com"
-             autofocus>
+      <input class="input{% if form.name.errors %} is-danger{% endif %}"
+             type="text" name="{{ form.name.html_name }}" id="{{ form.name.id_for_label }}"
+             value="{{ form.name.value|default:'' }}" autofocus>
     </div>
-    {% if form.email.errors %}
-    <p class="help is-danger">{% for e in form.email.errors %}{{ e }}{% endfor %}</p>
-    {% endif %}
+    {% if form.name.errors %}<p class="help is-danger">{% for e in form.name.errors %}{{ e }}{% endfor %}</p>{% endif %}
   </div>
 
   <div class="field">
+    <label class="label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
     <div class="control">
-      <button class="button is-primary" type="submit">Continue</button>
+      <input class="input{% if form.email.errors %} is-danger{% endif %}"
+             type="email" name="{{ form.email.html_name }}" id="{{ form.email.id_for_label }}"
+             value="{{ form.email.value|default:'' }}">
+    </div>
+    {% if form.email.errors %}<p class="help is-danger">{% for e in form.email.errors %}{{ e }}{% endfor %}</p>{% endif %}
+  </div>
+
+  <div class="field">
+    <label class="checkbox">
+      <input type="checkbox" name="{{ form.unrated_is_dislike.html_name }}"
+             id="{{ form.unrated_is_dislike.id_for_label }}"
+             {% if form.unrated_is_dislike.value %}checked{% endif %}>
+      {{ form.unrated_is_dislike.label }}
+    </label>
+    <p class="help">By default (unchecked), toppings you haven't rated are treated as neutral. Check this to treat them as dislikes instead.</p>
+  </div>
+
+  <hr>
+
+  {% include "webapp/profile/_preferences_form.html" %}
+
+  <div class="field mt-5">
+    <div class="control">
+      <button class="button is-primary" type="submit">Set My Preferences</button>
     </div>
   </div>
 </form>

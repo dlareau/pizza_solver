@@ -1,0 +1,49 @@
+{% if toppings %}
+<h2 class="subtitle mb-2">Topping Preferences</h2>
+
+{% for topping in toppings %}
+<div class="is-flex is-align-items-center mb-2" style="gap: 0.75rem;">
+  <span style="min-width: 10rem;">{{ topping.name }}</span>
+  <div class="buttons has-addons mb-0" data-topping="{{ topping.pk }}">
+    <button type="button" data-value="allergy"
+            class="button is-small pref-btn {% if topping.pk in allergy_ids %}is-danger{% else %}is-light{% endif %}">Allergy</button>
+    <button type="button" data-value="dislike"
+            class="button is-small pref-btn {% if topping.pk in dislike_ids %}is-warning{% else %}is-light{% endif %}">Dislike</button>
+    <button type="button" data-value="neutral"
+            class="button is-small pref-btn {% if topping.pk in neutral_ids %}is-info{% else %}is-light{% endif %}">Neutral</button>
+    <button type="button" data-value="like"
+            class="button is-small pref-btn {% if topping.pk in like_ids %}is-success{% else %}is-light{% endif %}">Like</button>
+  </div>
+  <input type="hidden" name="pref_{{ topping.pk }}"
+         value="{% if topping.pk in allergy_ids %}allergy{% elif topping.pk in dislike_ids %}dislike{% elif topping.pk in neutral_ids %}neutral{% elif topping.pk in like_ids %}like{% endif %}">
+</div>
+{% endfor %}
+
+{% else %}
+<p class="has-text-grey">No toppings have been added yet.</p>
+{% endif %}
+
+<script>
+(function () {
+  var COLOR = { allergy: 'is-danger', dislike: 'is-warning', neutral: 'is-info', like: 'is-success' };
+  document.querySelectorAll('.buttons[data-topping]').forEach(function (group) {
+    var hidden = document.querySelector('input[name="pref_' + group.dataset.topping + '"]');
+    group.querySelectorAll('.pref-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var val = btn.dataset.value;
+        var wasActive = !btn.classList.contains('is-light');
+        group.querySelectorAll('.pref-btn').forEach(function (b) {
+          b.className = 'button is-small pref-btn is-light';
+        });
+        if (!wasActive) {
+          btn.classList.remove('is-light');
+          btn.classList.add(COLOR[val]);
+          hidden.value = val;
+        } else {
+          hidden.value = '';
+        }
+      });
+    });
+  });
+}());
+</script>

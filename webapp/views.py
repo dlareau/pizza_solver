@@ -1,109 +1,63 @@
 import difflib
+import re
 import uuid
 
+from allauth.account.views import SignupView as AllauthSignupView
 from django.contrib.auth.decorators import login_required
-from django.core.mail import send_mail
 from django.db.models.functions import Lower
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.template.loader import render_to_string
-
 from django.http import HttpResponseForbidden
+from django.urls import reverse
 
-from .forms import CreateOrderForm, GuestSetupForm, ImportForm, MergeToppingForm, PersonProfileForm, ToppingForm, VendorForm
-from .models import Order, OrderedPizza, Person, PersonToppingPreference, Topping, PizzaVendor, VendorTopping
+from .forms import (
+    CreateOrderForm, GuestPreferenceForm, ImportForm,
+    MergeToppingForm, PersonProfileForm, PizzaGroupForm, ToppingForm, VendorForm,
+)
+from .models import (
+    GroupMembership, Order, OrderedPizza,
+    Person, PersonToppingPreference, PizzaGroup, Topping, PizzaVendor, VendorTopping,
+)
 from .solver import solve
 
-GUEST_COOKIE_NAME = 'pizza_guest_token'
-GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
+
+# ---------------------------------------------------------------------------
+# Profile
+# ---------------------------------------------------------------------------
+
+_GROUP_JOIN_RE = re.compile(r'^/groups/join/([0-9a-f-]{36})/?$')
 
 
-def get_person_from_request(request):
-    """Returns Person from logged-in user or guest cookie, or None."""
-    if request.user.is_authenticated:
-        try:
-            return request.user.person_profile
-        except Person.DoesNotExist:
-            pass
-    token_str = request.COOKIES.get(GUEST_COOKIE_NAME)
-    if token_str:
-        try:
-            return Person.objects.get(guest_token=uuid.UUID(token_str))
-        except (ValueError, Person.DoesNotExist):
-            pass
-    return None
+class CustomSignupView(AllauthSignupView):
+    def get_success_url(self):
+        next_url = self.get_next_url() or ''
+        match = _GROUP_JOIN_RE.match(next_url)
+        if match:
+            self.request.session['pending_group_join'] = match.group(1)
+        return '/profile/edit/?setup=1'
 
 
-def guest_setup(request):
-    """GET: show email form (or redirect if cookie valid). POST: look up or create person."""
-    if request.user.is_authenticated:
-        return redirect('profile_edit')
-
-    if request.method == 'GET':
-        token_str = request.COOKIES.get(GUEST_COOKIE_NAME)
-        if token_str:
-            try:
-                Person.objects.get(guest_token=uuid.UUID(token_str))
-                return redirect('profile_edit')
-            except (ValueError, Person.DoesNotExist):
-                pass
-        form = GuestSetupForm()
-        return render(request, 'webapp/profile/setup.html', {'form': form})
-
-    form = GuestSetupForm(request.POST)
-    if not form.is_valid():
-        return render(request, 'webapp/profile/setup.html', {'form': form})
-
-    email = form.cleaned_data['email']
-    try:
-        person = Person.objects.get(email__iexact=email)
-        # Send magic link email
-        magic_url = request.build_absolute_uri(f'/profile/magic/{person.guest_token}/')
-        body = render_to_string('webapp/email/magic_link.txt', {'magic_url': magic_url})
-        send_mail(
-            subject='Your Pizza Solver login link',
-            message=body,
-            from_email=None,
-            recipient_list=[email],
-        )
-        return render(request, 'webapp/profile/setup_sent.html', {'email': email})
-    except Person.DoesNotExist:
-        person = Person.objects.create(name=email, email=email)
-        response = redirect('profile_edit')
-        response.set_cookie(
-            GUEST_COOKIE_NAME,
-            str(person.guest_token),
-            max_age=GUEST_COOKIE_MAX_AGE,
-            httponly=True,
-            samesite='Lax',
-        )
-        return response
-
-
-def magic_link(request, token):
-    """Validate a magic-link token, set cookie, and redirect to profile edit."""
-    try:
-        person = Person.objects.get(guest_token=token)
-    except Person.DoesNotExist:
-        messages.error(request, "That link is invalid or has already been used.")
-        return redirect('guest_setup')
-
-    response = redirect('profile_edit')
-    response.set_cookie(
-        GUEST_COOKIE_NAME,
-        str(person.guest_token),
-        max_age=GUEST_COOKIE_MAX_AGE,
-        httponly=True,
-        samesite='Lax',
-    )
-    return response
-
-
+@login_required
 def profile_edit(request):
     """Display and handle the profile/preference edit form."""
-    person = get_person_from_request(request)
-    if person is None:
-        return redirect('guest_setup')
+    person, _ = Person.objects.get_or_create(
+        user_account=request.user,
+        defaults={'name': request.user.email, 'email': request.user.email},
+    )
+
+    setup_mode = request.GET.get('setup') == '1'
+
+    # Process pending group join from signup flow (pop so it only runs once)
+    pending_token = request.session.pop('pending_group_join', None)
+    if pending_token:
+        try:
+            import uuid as _uuid
+            group = PizzaGroup.objects.get(invite_token=_uuid.UUID(pending_token))
+            _, created = GroupMembership.objects.get_or_create(group=group, person=person)
+            if created:
+                messages.success(request, f"You've been added to '{group.name}'.")
+        except (ValueError, PizzaGroup.DoesNotExist):
+            pass
 
     toppings = Topping.objects.order_by('name')
     pref_qs = PersonToppingPreference.objects.filter(person=person)
@@ -132,19 +86,21 @@ def profile_edit(request):
 
                 if val is not None:
                     PersonToppingPreference.objects.update_or_create(
-                        person=person,
-                        topping=topping,
+                        person=person, topping=topping,
                         defaults={'preference': val},
                     )
                 else:
                     PersonToppingPreference.objects.filter(person=person, topping=topping).delete()
 
             messages.success(request, "Your preferences have been saved.")
+            if setup_mode:
+                return redirect('index')
             return redirect('profile_edit')
     else:
         form = PersonProfileForm(instance=person)
 
-    return render(request, 'webapp/profile/edit.html', {
+    template = 'webapp/profile/setup.html' if setup_mode else 'webapp/profile/edit.html'
+    return render(request, template, {
         'form': form,
         'toppings': toppings,
         'allergy_ids': allergy_ids,
@@ -154,69 +110,370 @@ def profile_edit(request):
     })
 
 
+# ---------------------------------------------------------------------------
+# Orders
+# ---------------------------------------------------------------------------
+
 @login_required
 def create_order(request):
     """
-    GET:  Display the order creation form.
-    POST: Validate form, create Order, run solver, save results, redirect to results.
+    GET:  Display the order creation form (optionally with a proto-order loaded via ?order=pk).
+    POST: Handle invite_guests (create proto-order, redirect back) or generate order (run solver).
     """
     person, _ = Person.objects.get_or_create(
         user_account=request.user,
         defaults={'name': request.user.email, 'email': request.user.email},
     )
 
+    if not person.pizza_groups.exists():
+        messages.info(request, "You need to belong to a group before creating an order.")
+        return redirect('group_list')
+
+    def _get_selected_group(data):
+        try:
+            group_pk = data.get('group')
+            if group_pk:
+                return person.pizza_groups.get(pk=group_pk)
+        except PizzaGroup.DoesNotExist:
+            pass
+        return None
+
+    # Load proto-order from query string or POST body
+    proto_order = None
+    proto_order_id = request.GET.get('order') or request.POST.get('proto_order_id')
+    if proto_order_id:
+        try:
+            proto_order = Order.objects.get(
+                pk=int(proto_order_id), host=person, invite_token__isnull=False
+            )
+            if proto_order.pizzas.exists():
+                proto_order = None  # already solved, treat as no proto-order
+        except (Order.DoesNotExist, ValueError, TypeError):
+            pass
+
     if request.method == 'POST':
-        form = CreateOrderForm(request.POST, host=person)
+        groups = list(person.pizza_groups.all())
+        selected_group = _get_selected_group(request.POST)
+        if selected_group is None and proto_order:
+            selected_group = proto_order.group
+
+        if 'invite_guests' in request.POST:
+            vendor_id = request.POST.get('vendor')
+            if not vendor_id or not selected_group:
+                messages.error(request, "Please select a vendor before inviting guests.")
+                form = CreateOrderForm(request.POST, host=person, selected_group=selected_group)
+                return render(request, 'webapp/order_create.html', {
+                    'form': form, 'host': person, 'selected_group': selected_group,
+                    'groups': groups, 'can_change_group': len(groups) > 1,
+                    'proto_order': None, 'invite_url': None, 'guest_person_ids_str': set(),
+                })
+            vendor = get_object_or_404(PizzaVendor, pk=vendor_id, group=selected_group)
+            order = Order.objects.create(
+                host=person,
+                group=selected_group,
+                vendor=vendor,
+                num_pizzas=1,
+                optimization_mode='maximize_likes',
+                invite_token=uuid.uuid4(),
+            )
+            order.people.add(person)
+            return redirect(reverse('create_order') + f'?order={order.pk}&group={selected_group.pk}')
+
+        form = CreateOrderForm(request.POST, host=person, selected_group=selected_group, proto_order=proto_order)
         if form.is_valid():
             data = form.cleaned_data
 
-            # Create the Order
-            order = Order.objects.create(
-                host=person,
-                vendor=data['vendor'],
-                num_pizzas=data['num_pizzas'],
-                optimization_mode=data['optimization_mode'],
-            )
-            order.people.set(set(data['people']) | {person})
+            if proto_order:
+                proto_order.num_pizzas = data['num_pizzas']
+                proto_order.optimization_mode = data['optimization_mode']
+                proto_order.save()
+                proto_order.people.set(set(data['people']) | {person})
+                target_order = proto_order
+            else:
+                target_order = Order.objects.create(
+                    host=person,
+                    vendor=data['vendor'],
+                    num_pizzas=data['num_pizzas'],
+                    optimization_mode=data['optimization_mode'],
+                    group=data['group'],
+                )
+                target_order.people.set(set(data['people']) | {person})
 
-            # Run the solver (saves pizzas and M2M relations internally)
             try:
-                solve(order)
+                solve(target_order)
             except NotImplementedError:
                 messages.warning(
                     request,
                     "The optimization algorithm is not yet implemented. "
                     "The order was created but no pizza assignments were generated."
                 )
-                return redirect('order_results', order_id=order.id)
+                return redirect('order_results', order_id=target_order.id)
             except ValueError as e:
                 messages.error(request, f"Solver error: {e}")
-                order.delete()
-                return render(request, 'webapp/order_create.html', {'form': form, 'host': person})
-
-            messages.success(request, "Pizza order generated successfully!")
-            return redirect('order_results', order_id=order.id)
+                if not proto_order:
+                    target_order.delete()
+                # Fall through to render with form errors
+            else:
+                messages.success(request, "Pizza order generated successfully!")
+                return redirect('order_results', order_id=target_order.id)
     else:
-        form = CreateOrderForm(host=person)
+        groups = list(person.pizza_groups.all())
+        selected_group = _get_selected_group(request.GET)
+        if selected_group is None and proto_order:
+            selected_group = proto_order.group
+        if selected_group is None and len(groups) == 1:
+            selected_group = groups[0]
 
-    return render(request, 'webapp/order_create.html', {'form': form, 'host': person})
+        if proto_order and selected_group:
+            participants_excl_host = proto_order.people.exclude(pk=person.pk)
+            form = CreateOrderForm(
+                host=person, selected_group=selected_group, proto_order=proto_order,
+                initial={
+                    'people': list(participants_excl_host.values_list('pk', flat=True)),
+                    'num_pizzas': proto_order.num_pizzas,
+                    'optimization_mode': proto_order.optimization_mode,
+                    'vendor': proto_order.vendor.pk,
+                    'group': selected_group.pk,
+                },
+            )
+        else:
+            form = CreateOrderForm(host=person, selected_group=selected_group)
+
+    # Build invite URL and guest PKs (used in both GET and POST-fall-through renders)
+    invite_url = None
+    guest_person_ids_str = set()
+    if proto_order and proto_order.invite_token:
+        invite_url = request.build_absolute_uri(
+            reverse('order_join', args=[proto_order.invite_token])
+        )
+        guest_person_ids_str = {str(pk) for pk in proto_order.guest_persons.values_list('pk', flat=True)}
+
+    return render(request, 'webapp/order_create.html', {
+        'form': form,
+        'host': person,
+        'selected_group': selected_group,
+        'groups': groups,
+        'can_change_group': len(groups) > 1,
+        'proto_order': proto_order,
+        'invite_url': invite_url,
+        'guest_person_ids_str': guest_person_ids_str,
+    })
 
 
 def order_results(request, order_id):
-    """Display the results of a pizza order: pizzas, toppings, and assigned people."""
-    order = get_object_or_404(
-        Order.objects.select_related('host', 'vendor').prefetch_related('people', 'pizzas'),
-        id=order_id,
-    )
-    pizzas = (
-        order.pizzas
-        .prefetch_related('toppings', 'people')
-        .all()
-    )
+    """Results page for a solved order. Unsolved orders redirect back to create_order."""
+    order = get_object_or_404(Order, pk=order_id)
+    if not order.pizzas.exists():
+        if order.invite_token:
+            return redirect(reverse('create_order') + f'?order={order.pk}&group={order.group.pk}')
+        return redirect('create_order')
+    pizzas = order.pizzas.prefetch_related('toppings', 'people').all()
+    guest_person_ids = set(order.guest_persons.values_list('pk', flat=True))
     return render(request, 'webapp/order_results.html', {
         'order': order,
         'pizzas': pizzas,
+        'guest_person_ids': guest_person_ids,
     })
+
+
+# ---------------------------------------------------------------------------
+# Guest views
+# ---------------------------------------------------------------------------
+
+@login_required
+def order_cancel_invite(request, order_id):
+    """Host-only POST: delete the proto-order (and its guests), redirect to create_order."""
+    if request.method != 'POST':
+        return redirect('create_order')
+    order = get_object_or_404(Order, pk=order_id, invite_token__isnull=False)
+    person = get_object_or_404(Person, user_account=request.user)
+    if order.host != person:
+        return HttpResponseForbidden("Only the host can cancel this invite.")
+    if order.pizzas.exists():
+        return redirect('order_results', order_id=order.pk)
+    group_pk = order.group.pk
+    order.delete()  # cascades to guest Persons
+    return redirect(reverse('create_order') + f'?group={group_pk}')
+
+
+def order_join(request, invite_token):
+    """No-auth guest join page. Session dedup prevents duplicate entries."""
+    order = get_object_or_404(Order, invite_token=invite_token)
+    toppings = list(order.vendor.toppings.all().order_by('name'))
+    session_key = f'guest_person_{order.pk}'
+
+    if order.pizzas.exists():
+        return render(request, 'webapp/guests/join.html', {
+            'order': order,
+            'already_solved': True,
+        })
+
+    existing_pk = request.session.get(session_key)
+    if existing_pk:
+        guest = Person.objects.filter(pk=existing_pk, guest_for_order=order).first()
+        if guest:
+            if request.method == 'POST':
+                for topping in toppings:
+                    val = request.POST.get(f'pref_{topping.pk}', '0')
+                    try:
+                        pref_val = int(val)
+                    except ValueError:
+                        pref_val = 0
+                    PersonToppingPreference.objects.update_or_create(
+                        person=guest,
+                        topping=topping,
+                        defaults={'preference': pref_val},
+                    )
+                messages.success(request, "Your preferences have been updated!")
+                return redirect('order_join', invite_token=invite_token)
+            pref_qs = guest.topping_preferences.filter(topping__in=toppings)
+            allergy_ids = set(pref_qs.filter(preference=PersonToppingPreference.ALLERGY).values_list('topping_id', flat=True))
+            dislike_ids = set(pref_qs.filter(preference=PersonToppingPreference.DISLIKE).values_list('topping_id', flat=True))
+            neutral_ids = set(pref_qs.filter(preference=PersonToppingPreference.NEUTRAL).values_list('topping_id', flat=True))
+            like_ids = set(pref_qs.filter(preference=PersonToppingPreference.LIKE).values_list('topping_id', flat=True))
+            return render(request, 'webapp/guests/join.html', {
+                'order': order,
+                'toppings': toppings,
+                'guest': guest,
+                'allergy_ids': allergy_ids,
+                'dislike_ids': dislike_ids,
+                'neutral_ids': neutral_ids,
+                'like_ids': like_ids,
+            })
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        if not name:
+            return render(request, 'webapp/guests/join.html', {
+                'order': order,
+                'toppings': toppings,
+                'error': 'Please enter your name.',
+            })
+        guest = Person.objects.create(name=name, email='', guest_for_order=order)
+        order.people.add(guest)
+        for topping in toppings:
+            val = request.POST.get(f'pref_{topping.pk}', '0')
+            try:
+                pref_val = int(val)
+            except ValueError:
+                pref_val = 0
+            PersonToppingPreference.objects.create(person=guest, topping=topping, preference=pref_val)
+        request.session[session_key] = guest.pk
+        messages.success(request, "Your preferences have been saved!")
+        return redirect('order_join', invite_token=invite_token)
+
+    return render(request, 'webapp/guests/join.html', {
+        'order': order,
+        'toppings': toppings,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Groups
+# ---------------------------------------------------------------------------
+
+@login_required
+def group_list(request):
+    person, _ = Person.objects.get_or_create(
+        user_account=request.user,
+        defaults={'name': request.user.email, 'email': request.user.email},
+    )
+    memberships = GroupMembership.objects.filter(person=person).select_related('group')
+    return render(request, 'webapp/groups/list.html', {'memberships': memberships})
+
+
+@login_required
+def group_create(request):
+    person, _ = Person.objects.get_or_create(
+        user_account=request.user,
+        defaults={'name': request.user.email, 'email': request.user.email},
+    )
+    if request.method == 'POST':
+        form = PizzaGroupForm(request.POST)
+        if form.is_valid():
+            group = form.save()
+            GroupMembership.objects.create(group=group, person=person, is_admin=True)
+            messages.success(request, f"Group '{group.name}' created.")
+            return redirect('group_detail', pk=group.pk)
+    else:
+        form = PizzaGroupForm()
+    return render(request, 'webapp/groups/form.html', {'form': form, 'action': 'Create'})
+
+
+@login_required
+def group_detail(request, pk):
+    group = get_object_or_404(PizzaGroup, pk=pk)
+    person = get_object_or_404(Person, user_account=request.user)
+    membership = get_object_or_404(GroupMembership, group=group, person=person)
+    memberships = GroupMembership.objects.filter(group=group).select_related('person')
+    invite_url = request.build_absolute_uri(f'/groups/join/{group.invite_token}/')
+    return render(request, 'webapp/groups/detail.html', {
+        'group': group,
+        'memberships': memberships,
+        'is_admin': membership.is_admin,
+        'invite_url': invite_url,
+    })
+
+
+@login_required
+def group_join(request, token):
+    group = get_object_or_404(PizzaGroup, invite_token=token)
+    person, _ = Person.objects.get_or_create(
+        user_account=request.user,
+        defaults={'name': request.user.email, 'email': request.user.email},
+    )
+    _, created = GroupMembership.objects.get_or_create(group=group, person=person)
+    if created:
+        messages.success(request, f"You have joined '{group.name}'.")
+    else:
+        messages.info(request, f"You are already a member of '{group.name}'.")
+    return redirect('group_detail', pk=group.pk)
+
+
+@login_required
+def group_reset_invite(request, pk):
+    if request.method != 'POST':
+        return redirect('group_detail', pk=pk)
+    group = get_object_or_404(PizzaGroup, pk=pk)
+    person = get_object_or_404(Person, user_account=request.user)
+    membership = get_object_or_404(GroupMembership, group=group, person=person)
+    if not membership.is_admin:
+        return HttpResponseForbidden("Only admins can reset the invite link.")
+    import uuid as _uuid
+    group.invite_token = _uuid.uuid4()
+    group.save()
+    messages.success(request, "Invite link has been reset. The old link will no longer work.")
+    return redirect('group_detail', pk=pk)
+
+
+@login_required
+def group_remove_member(request, pk, person_pk):
+    if request.method != 'POST':
+        return redirect('group_detail', pk=pk)
+    group = get_object_or_404(PizzaGroup, pk=pk)
+    requester = get_object_or_404(Person, user_account=request.user)
+    requester_membership = get_object_or_404(GroupMembership, group=group, person=requester)
+    if not requester_membership.is_admin:
+        return HttpResponseForbidden("Only admins can remove members.")
+    target_person = get_object_or_404(Person, pk=person_pk)
+    GroupMembership.objects.filter(group=group, person=target_person).delete()
+    messages.success(request, f"{target_person.name} removed from {group.name}.")
+    return redirect('group_detail', pk=pk)
+
+
+@login_required
+def group_delete(request, pk):
+    group = get_object_or_404(PizzaGroup, pk=pk)
+    person = get_object_or_404(Person, user_account=request.user)
+    membership = get_object_or_404(GroupMembership, group=group, person=person)
+    if not membership.is_admin:
+        return HttpResponseForbidden("Only admins can delete groups.")
+    if request.method == 'POST':
+        name = group.name
+        group.delete()
+        messages.success(request, f"Group '{name}' deleted.")
+        return redirect('group_list')
+    return render(request, 'webapp/groups/confirm_delete.html', {'group': group})
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +488,8 @@ def topping_list(request):
 
 @login_required
 def topping_create(request):
+    if not request.user.is_staff:
+        return HttpResponseForbidden()
     if request.method == 'POST':
         form = ToppingForm(request.POST)
         if form.is_valid():
@@ -244,6 +503,8 @@ def topping_create(request):
 
 @login_required
 def topping_edit(request, pk):
+    if not request.user.is_staff:
+        return HttpResponseForbidden()
     topping = get_object_or_404(Topping, pk=pk)
     if request.method == 'POST':
         form = ToppingForm(request.POST, instance=topping)
@@ -258,6 +519,8 @@ def topping_edit(request, pk):
 
 @login_required
 def topping_merge(request, pk):
+    if not request.user.is_staff:
+        return HttpResponseForbidden()
     topping = get_object_or_404(Topping, pk=pk)
 
     if request.method == 'POST':
@@ -265,7 +528,6 @@ def topping_merge(request, pk):
         if form.is_valid():
             target = form.cleaned_data['target']
 
-            # PersonToppingPreference — skip if person already has a preference for target
             for pref in PersonToppingPreference.objects.filter(topping=topping):
                 if PersonToppingPreference.objects.filter(person=pref.person, topping=target).exists():
                     pref.delete()
@@ -273,7 +535,6 @@ def topping_merge(request, pk):
                     pref.topping = target
                     pref.save()
 
-            # VendorTopping — skip if vendor already offers target
             for vt in VendorTopping.objects.filter(topping=topping):
                 if VendorTopping.objects.filter(vendor=vt.vendor, topping=target).exists():
                     vt.delete()
@@ -281,7 +542,6 @@ def topping_merge(request, pk):
                     vt.topping = target
                     vt.save()
 
-            # OrderedPizza M2M fields
             for pizza in OrderedPizza.objects.filter(toppings=topping):
                 pizza.toppings.add(target)
                 pizza.toppings.remove(topping)
@@ -304,6 +564,8 @@ def topping_merge(request, pk):
 
 @login_required
 def topping_delete(request, pk):
+    if not request.user.is_staff:
+        return HttpResponseForbidden()
     topping = get_object_or_404(Topping, pk=pk)
     if request.method == 'POST':
         name = str(topping)
@@ -319,28 +581,67 @@ def topping_delete(request, pk):
 
 @login_required
 def vendor_list(request):
-    vendors = PizzaVendor.objects.prefetch_related('toppings').order_by('name')
+    person = get_object_or_404(Person, user_account=request.user)
+    group_ids = person.pizza_groups.values_list('pk', flat=True)
+    vendors = (
+        PizzaVendor.objects
+        .filter(group__in=group_ids)
+        .select_related('group')
+        .prefetch_related('toppings')
+        .order_by('name')
+    )
     return render(request, 'webapp/vendors/list.html', {'vendors': vendors})
 
 
 @login_required
 def vendor_create(request):
+    person = get_object_or_404(Person, user_account=request.user)
+    groups = list(person.pizza_groups.all())
+
+    def _get_selected_group(data):
+        try:
+            group_pk = data.get('group')
+            if group_pk:
+                return person.pizza_groups.get(pk=group_pk)
+        except PizzaGroup.DoesNotExist:
+            pass
+        return None
+
     if request.method == 'POST':
+        selected_group = _get_selected_group(request.POST)
+        if not selected_group:
+            messages.error(request, "A valid group is required to create a vendor.")
+            return redirect('vendor_create')
         form = VendorForm(request.POST)
         if form.is_valid():
-            vendor = form.save()
+            vendor = form.save(commit=False)
+            vendor.group = selected_group
+            vendor.save()
             for topping in form.cleaned_data['toppings']:
                 VendorTopping.objects.create(vendor=vendor, topping=topping)
             messages.success(request, f"Vendor '{vendor}' created.")
             return redirect('vendor_list')
     else:
+        selected_group = _get_selected_group(request.GET)
+        if selected_group is None and len(groups) == 1:
+            selected_group = groups[0]
         form = VendorForm()
-    return render(request, 'webapp/vendors/form.html', {'form': form, 'action': 'Create'})
+
+    return render(request, 'webapp/vendors/form.html', {
+        'form': form,
+        'action': 'Create',
+        'selected_group': selected_group,
+        'groups': groups,
+        'can_change_group': len(groups) > 1,
+    })
 
 
 @login_required
 def vendor_edit(request, pk):
     vendor = get_object_or_404(PizzaVendor, pk=pk)
+    person = get_object_or_404(Person, user_account=request.user)
+    if not vendor.group or not person.pizza_groups.filter(pk=vendor.group_id).exists():
+        return HttpResponseForbidden("You don't have permission to edit this vendor.")
     if request.method == 'POST':
         form = VendorForm(request.POST, instance=vendor)
         if form.is_valid():
@@ -354,12 +655,21 @@ def vendor_edit(request, pk):
             return redirect('vendor_list')
     else:
         form = VendorForm(instance=vendor)
-    return render(request, 'webapp/vendors/form.html', {'form': form, 'action': 'Edit', 'vendor': vendor})
+    return render(request, 'webapp/vendors/form.html', {
+        'form': form,
+        'action': 'Edit',
+        'vendor': vendor,
+        'selected_group': vendor.group,
+        'can_change_group': False,
+    })
 
 
 @login_required
 def vendor_delete(request, pk):
     vendor = get_object_or_404(PizzaVendor, pk=pk)
+    person = get_object_or_404(Person, user_account=request.user)
+    if not vendor.group or not person.pizza_groups.filter(pk=vendor.group_id).exists():
+        return HttpResponseForbidden("You don't have permission to delete this vendor.")
     if request.method == 'POST':
         name = str(vendor)
         vendor.delete()
