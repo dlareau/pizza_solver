@@ -1,18 +1,24 @@
 from django import forms
 from django.forms import CheckboxSelectMultiple, ModelMultipleChoiceField
-from .models import Order, Person, PizzaVendor, Topping
+from .models import Order, Person, PizzaGroup, PizzaVendor, Topping
 
 
 class CreateOrderForm(forms.Form):
+    group = forms.ModelChoiceField(
+        queryset=PizzaGroup.objects.none(),
+        label="Group",
+        empty_label="-- Select a group --",
+    )
     vendor = forms.ModelChoiceField(
         queryset=PizzaVendor.objects.all(),
         label="Pizza Vendor",
         empty_label="-- Select a vendor --",
     )
     people = forms.ModelMultipleChoiceField(
-        queryset=Person.objects.all(),
+        queryset=Person.objects.none(),
         label="People in this order",
         widget=forms.CheckboxSelectMultiple,
+        required=False,
     )
     num_pizzas = forms.IntegerField(
         min_value=1,
@@ -25,14 +31,43 @@ class CreateOrderForm(forms.Form):
         initial='maximize_likes',
     )
 
-    def __init__(self, *args, host=None, **kwargs):
+    def __init__(self, *args, host=None, selected_group=None, proto_order=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.host = host
+        self._guest_pks = set()
+        if host is not None:
+            self.fields['group'].queryset = host.pizza_groups.all()
+
+        if selected_group is not None:
+            self.fields['group'].widget = forms.HiddenInput()
+            self.fields['group'].initial = selected_group.pk
+
+            if proto_order is not None:
+                self.fields['vendor'].queryset = PizzaVendor.objects.filter(pk=proto_order.vendor.pk)
+                self.fields['vendor'].widget = forms.HiddenInput()
+                guest_persons = proto_order.guest_persons.all()
+                self._guest_pks = set(guest_persons.values_list('pk', flat=True))
+                group_members_excl_host = (
+                    selected_group.members.exclude(pk=host.pk) if host else selected_group.members.all()
+                )
+                self.fields['people'].queryset = (group_members_excl_host | guest_persons).distinct()
+            else:
+                self.fields['people'].queryset = (
+                    selected_group.members.exclude(pk=host.pk) if host else selected_group.members.all()
+                )
+                self.fields['vendor'].queryset = PizzaVendor.objects.filter(group=selected_group)
 
     def clean(self):
         cleaned = super().clean()
+        group = cleaned.get('group')
         people = cleaned.get('people')
         num_pizzas = cleaned.get('num_pizzas')
+
+        if group and people is not None:
+            group_member_ids = set(group.members.values_list('pk', flat=True))
+            for person in people:
+                if person.pk not in group_member_ids and person.pk not in self._guest_pks:
+                    self.add_error('people', f"{person.name} is not a member of the selected group.")
 
         if num_pizzas and people is not None and self.host:
             effective_count = len(set(people) | {self.host})
@@ -61,14 +96,13 @@ class MergeToppingForm(forms.Form):
         self.fields['target'].queryset = qs
 
 
-class GuestSetupForm(forms.Form):
-    email = forms.EmailField(label="Your email address")
-
-
 class PersonProfileForm(forms.ModelForm):
     class Meta:
         model = Person
         fields = ['name', 'email', 'unrated_is_dislike']
+        labels = {
+            'unrated_is_dislike': 'Treat unrated toppings as dislikes',
+        }
 
 
 class ToppingForm(forms.ModelForm):
@@ -92,3 +126,18 @@ class VendorForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.instance.pk:
             self.fields['toppings'].initial = self.instance.toppings.values_list('pk', flat=True)
+
+
+class PizzaGroupForm(forms.ModelForm):
+    class Meta:
+        model = PizzaGroup
+        fields = ['name']
+
+
+
+class GuestPreferenceForm(forms.ModelForm):
+    class Meta:
+        model = Person
+        fields = ['name', 'unrated_is_dislike']
+
+

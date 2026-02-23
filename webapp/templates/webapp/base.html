@@ -22,18 +22,17 @@
     <div class="navbar-start">
       <a class="navbar-item" href="{% url 'create_order' %}">New Order</a>
       {% if user.is_authenticated %}
-      <a class="navbar-item" href="{% url 'topping_list' %}">Toppings</a>
+      <a class="navbar-item" href="{% url 'group_list' %}">Groups</a>
       <a class="navbar-item" href="{% url 'vendor_list' %}">Vendors</a>
       {% if user.is_staff %}
+      <a class="navbar-item" href="{% url 'topping_list' %}">Toppings</a>
       <a class="navbar-item" href="{% url 'import_data' %}">Import</a>
       {% endif %}
       {% endif %}
     </div>
     <div class="navbar-end">
       {% if user.is_authenticated %}
-      <div class="navbar-item">
-        <span class="has-text-grey">{{ user.email }}</span>
-      </div>
+      <a class="navbar-item" href="{% url 'profile_edit' %}">Profile</a>
       <div class="navbar-item">
         <a class="button is-primary is-outlined is-small" href="{% url 'account_logout' %}">Log out</a>
       </div>
@@ -51,6 +50,7 @@
   <div class="container">
     {% for msg in messages %}
     <div class="notification {% if 'success' in msg.tags %}is-success{% elif 'warning' in msg.tags %}is-warning{% elif 'error' in msg.tags %}is-danger{% else %}is-info{% endif %} is-light">
+      <button class="delete" aria-label="dismiss"></button>
       {{ msg }}
     </div>
     {% endfor %}
@@ -74,6 +74,10 @@
         menu.classList.toggle('is-active');
       });
     }
+
+    document.querySelectorAll('.notification .delete').forEach(btn => {
+      btn.addEventListener('click', () => btn.closest('.notification').remove());
+    });
   });
 </script>
 </body>

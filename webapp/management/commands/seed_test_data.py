@@ -1,29 +1,23 @@
 """
-Management command to seed the database with test data.
+Management command to seed the database with test users and sample preference data.
 
 Usage:
-    python manage.py seed
+    python manage.py seed_test_data
 
-Wipes all non-user tables, then seeds one vendor, 27 anonymized people,
-and their topping preferences (meats + vegetables only) imported from the
-group preference survey.
+Wipes all non-superuser accounts and non-topping data, then creates 27 test users
+(Person01–Person27) with password 'testpass', along with a group, a vendor, and
+topping preferences sourced from a real group preference survey.
 
-Preference scale: LIKE=1, NEUTRAL=0, DISLIKE=-1, ALLERGY=-2.
-Survey values of -3 and -2 are both mapped to ALLERGY.
+Toppings are created via get_or_create so this command works whether or not
+seed_toppings has been run first.
 """
 
 from django.core.management.base import BaseCommand
 
 from webapp.models import (
-    Order, OrderedPizza, Person, PersonToppingPreference,
-    PizzaVendor, Topping, VendorTopping,
+    GroupMembership, Order, OrderedPizza, Person, PersonToppingPreference,
+    PizzaGroup, PizzaVendor, Topping, User, VendorTopping,
 )
-
-# ---------------------------------------------------------------------------
-# Hardcoded survey data (meats + veggies; sauces and cheeses excluded)
-# 27 people, anonymized as Person01–Person27.
-# Mapping applied: -3 → -2 (ALLERGY), -2 → -2, -1 → -1, 0 → 0, 1 → 1.
-# ---------------------------------------------------------------------------
 
 PEOPLE = [
     "Person01", "Person02", "Person03", "Person04", "Person05", "Person06", "Person07",
@@ -59,60 +53,81 @@ PREFERENCES = {
 }
 
 VENDOR_NAME = "Mario's Pizza"
+GROUP_NAME = "Survey Group"
+TEST_PASSWORD = "testpass"
 
 
 class Command(BaseCommand):
-    help = "Wipe non-user tables and seed with survey preference data."
+    help = "Wipe non-superuser accounts and non-topping data, then seed with test users and sample preferences."
 
     def handle(self, *args, **options):
         self._wipe()
-        toppings = self._create_toppings()
-        vendor = self._create_vendor(toppings)
-        self._create_people(toppings)
-        self.stdout.write(self.style.SUCCESS("Seeding complete."))
+        toppings = self._ensure_toppings()
+        people = self._create_people(toppings)
+        group = self._create_group(people)
+        self._create_vendor(toppings, group)
+        self.stdout.write(self.style.SUCCESS("Test data seeding complete."))
 
     def _wipe(self):
         OrderedPizza.objects.all().delete()
         Order.objects.all().delete()
         PersonToppingPreference.objects.all().delete()
+        GroupMembership.objects.all().delete()
+        PizzaGroup.objects.all().delete()
         VendorTopping.objects.all().delete()
         Person.objects.all().delete()
+        User.objects.filter(is_superuser=False).delete()
         PizzaVendor.objects.all().delete()
-        Topping.objects.all().delete()
-        self.stdout.write("  Wiped all non-user tables.")
+        self.stdout.write("  Wiped all non-superuser, non-topping data.")
 
-    def _create_toppings(self):
+    def _ensure_toppings(self):
         toppings = {}
         for name in PREFERENCES:
-            t = Topping.objects.create(name=name)
-            toppings[name] = t
-        self.stdout.write(f"  Created {len(toppings)} toppings.")
+            topping, _ = Topping.objects.get_or_create(name=name)
+            toppings[name] = topping
+        self.stdout.write(f"  Ensured {len(toppings)} toppings exist.")
         return toppings
-
-    def _create_vendor(self, toppings):
-        vendor = PizzaVendor.objects.create(name=VENDOR_NAME)
-        for topping in toppings.values():
-            VendorTopping.objects.create(vendor=vendor, topping=topping)
-        self.stdout.write(f"  Created vendor: {VENDOR_NAME}")
-        return vendor
 
     def _create_people(self, toppings):
         PREF = PersonToppingPreference
         topping_names = list(PREFERENCES.keys())
+        people = []
 
         for p_idx, name in enumerate(PEOPLE):
-            person = Person.objects.create(
-                name=name,
-                email=f"{name.lower()}@example.com",
-            )
-            bulk = []
-            for topping_name in topping_names:
-                value = PREFERENCES[topping_name][p_idx]
-                bulk.append(PREF(
+            email = f"{name.lower()}@example.com"
+            user = User.objects.create(username=email, email=email)
+            user.set_password(TEST_PASSWORD)
+            user.save()
+
+            person = Person.objects.create(name=name, email=email, user_account=user)
+            bulk = [
+                PREF(
                     person=person,
                     topping=toppings[topping_name],
-                    preference=value,
-                ))
+                    preference=PREFERENCES[topping_name][p_idx],
+                )
+                for topping_name in topping_names
+            ]
             PREF.objects.bulk_create(bulk)
+            people.append(person)
 
-        self.stdout.write(f"  Created {len(PEOPLE)} people with preferences.")
+        self.stdout.write(f"  Created {len(PEOPLE)} users (password: '{TEST_PASSWORD}') with preferences.")
+        return people
+
+    def _create_group(self, people):
+        group = PizzaGroup.objects.create(name=GROUP_NAME)
+        GroupMembership.objects.bulk_create([
+            GroupMembership(group=group, person=person, is_admin=(i == 0))
+            for i, person in enumerate(people)
+        ])
+        self.stdout.write(f"  Created group '{GROUP_NAME}' with {len(people)} members.")
+        return group
+
+    def _create_vendor(self, toppings, group):
+        vendor = PizzaVendor.objects.create(name=VENDOR_NAME, group=group)
+        VendorTopping.objects.bulk_create([
+            VendorTopping(vendor=vendor, topping=topping)
+            for topping in toppings.values()
+        ])
+        self.stdout.write(f"  Created vendor '{VENDOR_NAME}' with {len(toppings)} toppings.")
+        return vendor

@@ -5,16 +5,82 @@
 <h1 class="title">New Pizza Order</h1>
 <p class="subtitle">Ordering as: <strong>{{ host.name }}</strong></p>
 
-<form method="post" style="max-width: 560px;">
-  {% csrf_token %}
+{% if not selected_group %}
 
-  {% if form.non_field_errors %}
-  <div class="notification is-danger is-light">
-    {% for error in form.non_field_errors %}
-    <p>{{ error }}</p>
-    {% endfor %}
+{# Step 1: pick a group #}
+<form method="get" action="" style="max-width: 400px;">
+  <div class="field">
+    <label class="label">Select a Group</label>
+    <div class="control">
+      <div class="select is-fullwidth">
+        <select name="group">
+          <option value="">-- Select a group --</option>
+          {% for group in groups %}
+          <option value="{{ group.pk }}">{{ group.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
   </div>
+  <div class="field">
+    <div class="control">
+      <button class="button is-primary" type="submit">Continue</button>
+    </div>
+  </div>
+</form>
+
+{% else %}
+
+{# Step 2: full order form #}
+<p class="mb-4">
+  <strong>Group:</strong> {{ selected_group.name }}
+  {% if can_change_group %}
+  <a class="ml-3 is-size-7" href="{% url 'create_order' %}">Change group</a>
   {% endif %}
+</p>
+
+{% if proto_order and invite_url %}
+<div class="box" style="max-width:560px;">
+  <h3 class="subtitle is-6 mb-2">Guest Invite Link</h3>
+  <p class="help mb-3">Share this link with anyone you want to invite to set their topping preferences.</p>
+  <div class="field has-addons">
+    <div class="control is-expanded">
+      <input id="invite-link" class="input is-small" type="text" readonly value="{{ invite_url }}">
+    </div>
+    <div class="control">
+      <button class="button is-info is-small" type="button"
+              onclick="navigator.clipboard.writeText(document.getElementById('invite-link').value);
+                       this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000);">
+        Copy
+      </button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if proto_order %}
+{# Vendor locked section — separate form to avoid nesting #}
+<div class="field" style="max-width:560px;">
+  <label class="label">Pizza Vendor</label>
+  <div class="is-flex is-align-items-center" style="gap: 0.75rem;">
+    <span class="is-size-6">{{ proto_order.vendor }}</span>
+    <form method="post" action="{% url 'order_cancel_invite' proto_order.id %}"
+          onsubmit="return confirm('Switching vendor will remove all guests and their preferences. Are you sure?');"
+          style="display:inline; margin:0;">
+      {% csrf_token %}
+      <button class="button is-warning is-outlined is-small" type="submit">Switch Vendor</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<form method="post" style="max-width: 560px;" novalidate id="order-form">
+  {% csrf_token %}
+  {{ form.group }} {# hidden input #}
+  {% if proto_order %}
+  <input type="hidden" name="proto_order_id" value="{{ proto_order.pk }}">
+  {{ form.vendor }} {# hidden input — locked vendor #}
+  {% else %}
 
   <div class="field">
     <label class="label" for="{{ form.vendor.id_for_label }}">{{ form.vendor.label }}</label>
@@ -28,15 +94,42 @@
     {% endif %}
   </div>
 
+  <div class="field mt-2">
+    <button class="button is-info is-outlined" type="submit" name="invite_guests" value="1"
+            id="invite-guests-btn" disabled>
+      Invite Guests &amp; Get Link
+    </button>
+    <p class="help">Locks in the vendor and gives you a shareable link before the order is solved.</p>
+  </div>
+
+  {% endif %}
+
+  {% if form.non_field_errors %}
+  <div class="notification is-danger is-light">
+    {% for error in form.non_field_errors %}
+    <p>{{ error }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <div class="field">
     <label class="label">{{ form.people.label }}</label>
-    <div class="control">
+    <p class="help mb-2">Select additional group members to include (you are always included).</p>
+
+    <div id="people-tags"
+         style="display:flex; flex-wrap:wrap; gap:0.4rem;
+                max-height:160px; overflow-y:auto;
+                border:1px solid #dbdbdb; border-radius:4px; padding:0.5rem;">
       {% for choice in form.people %}
-      <label class="checkbox" style="display:block; margin-bottom:0.3rem;">
-        {{ choice.tag }} {{ choice.choice_label }}
+      <label style="cursor:pointer; margin:0;">
+        <span class="tag is-medium is-light person-tag">
+          {{ choice.choice_label }}{% if choice.data.value|stringformat:"s" in guest_person_ids_str %} <em class="has-text-grey" style="font-size:0.85em;">(guest)</em>{% endif %}
+        </span>
+        <span style="display:none;">{{ choice.tag }}</span>
       </label>
       {% endfor %}
     </div>
+
     {% if form.people.errors %}
     <p class="help is-danger">{% for e in form.people.errors %}{{ e }}{% endfor %}</p>
     {% endif %}
@@ -44,12 +137,20 @@
 
   <div class="field">
     <label class="label" for="{{ form.num_pizzas.id_for_label }}">{{ form.num_pizzas.label }}</label>
-    <div class="control">
-      <input class="input" style="max-width:200px;" type="number"
-             name="{{ form.num_pizzas.html_name }}"
-             id="{{ form.num_pizzas.id_for_label }}"
-             value="{{ form.num_pizzas.value|default:1 }}"
-             min="1">
+    <div class="field has-addons" style="max-width:200px;">
+      <div class="control">
+        <button type="button" class="button" id="pizzas-dec">−</button>
+      </div>
+      <div class="control is-expanded">
+        <input class="input" style="text-align:center;" type="number"
+               name="{{ form.num_pizzas.html_name }}"
+               id="{{ form.num_pizzas.id_for_label }}"
+               value="{{ form.num_pizzas.value|default:1 }}"
+               min="1">
+      </div>
+      <div class="control">
+        <button type="button" class="button" id="pizzas-inc">+</button>
+      </div>
     </div>
     {% if form.num_pizzas.errors %}
     <p class="help is-danger">{% for e in form.num_pizzas.errors %}{{ e }}{% endfor %}</p>
@@ -75,23 +176,6 @@
   </div>
 </form>
 
-<div class="box mt-5" style="max-width:560px;">
-  <p class="subtitle is-6">Invite guests to set their preferences</p>
-  <div class="field has-addons">
-    <div class="control is-expanded">
-      <input id="invite-link" class="input is-small" type="text" readonly
-             value="{{ request.scheme }}://{{ request.get_host }}{% url 'guest_setup' %}">
-    </div>
-    <div class="control">
-      <button class="button is-small is-info" type="button"
-              onclick="navigator.clipboard.writeText(document.getElementById('invite-link').value);
-                       this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000);">
-        Copy
-      </button>
-    </div>
-  </div>
-</div>
-
 <div id="loading-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.95); z-index:9999; flex-direction:column; align-items:center; justify-content:center; gap:1.5rem;">
   <p class="title">Optimizing your pizza order&hellip;</p>
   <p class="subtitle has-text-grey">This may take up to 20 seconds.</p>
@@ -100,16 +184,99 @@
   </div>
 </div>
 
+<style>
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+#invite-guests-btn:disabled {
+  background-color: transparent !important;
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+</style>
+
 <script>
-document.querySelector('form').addEventListener('submit', function () {
-  var overlay = document.getElementById('loading-overlay');
-  var bar = document.getElementById('loading-bar');
-  overlay.style.display = 'flex';
-  // Force a synchronous layout flush so the browser commits width:0% before
-  // we set the transition — without this the start state gets skipped.
-  bar.getBoundingClientRect();
-  bar.style.transition = 'width 20s linear';
-  bar.style.width = '100%';
+(function () {
+  document.querySelectorAll('#people-tags label').forEach(function (lbl) {
+    var cb = lbl.querySelector('input[type="checkbox"]');
+    var tag = lbl.querySelector('.person-tag');
+    if (cb && cb.checked) {
+      tag.classList.replace('is-light', 'is-link');
+    }
+    lbl.addEventListener('click', function (e) {
+      e.preventDefault();
+      cb.checked = !cb.checked;
+      if (cb.checked) {
+        tag.classList.replace('is-light', 'is-link');
+      } else {
+        tag.classList.replace('is-link', 'is-light');
+      }
+    });
+  });
+}());
+
+document.getElementById('pizzas-dec').addEventListener('click', function () {
+  var input = document.getElementById('{{ form.num_pizzas.id_for_label }}');
+  var val = parseInt(input.value, 10) || 1;
+  if (val > 1) input.value = val - 1;
 });
+document.getElementById('pizzas-inc').addEventListener('click', function () {
+  var input = document.getElementById('{{ form.num_pizzas.id_for_label }}');
+  var val = parseInt(input.value, 10) || 1;
+  input.value = val + 1;
+});
+
+document.getElementById('order-form').addEventListener('submit', function (e) {
+  {% if not proto_order %}
+  document.querySelectorAll('[data-client-error]').forEach(function (el) { el.remove(); });
+
+  function showError(anchorEl, message) {
+    var p = document.createElement('p');
+    p.className = 'help is-danger';
+    p.setAttribute('data-client-error', '');
+    p.textContent = message;
+    anchorEl.insertAdjacentElement('afterend', p);
+    return p;
+  }
+
+  var firstError = null;
+  var vendorSelect = document.querySelector('select[name="{{ form.vendor.html_name }}"]');
+  if (!vendorSelect.value) {
+    firstError = showError(vendorSelect.closest('.control'), 'Please select a vendor.');
+  }
+
+  if (firstError) {
+    e.preventDefault();
+    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  // Only show the loading overlay for the main "Generate" submit, not "Invite Guests"
+  if (!e.submitter || e.submitter.name !== 'invite_guests') {
+  {% endif %}
+    var overlay = document.getElementById('loading-overlay');
+    var bar = document.getElementById('loading-bar');
+    overlay.style.display = 'flex';
+    bar.getBoundingClientRect();
+    bar.style.transition = 'width 20s linear';
+    bar.style.width = '100%';
+  {% if not proto_order %}
+  }
+  {% endif %}
+});
+
+{% if not proto_order %}
+(function () {
+  var vendorSelect = document.getElementById('{{ form.vendor.id_for_label }}');
+  var inviteBtn = document.getElementById('invite-guests-btn');
+  function toggleInvite() {
+    inviteBtn.disabled = !vendorSelect.value;
+  }
+  vendorSelect.addEventListener('change', toggleInvite);
+  toggleInvite();
+}());
+{% endif %}
 </script>
+
+{% endif %}
 {% endblock %}

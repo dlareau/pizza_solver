@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-34mwb!@)g(8(y6(7#fe6y)m0--ub#(7tz8m*p33!&tycg$wvbl
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -148,7 +148,7 @@ ACCOUNT_UNIQUE_EMAIL = True
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Email verification settings
-ACCOUNT_EMAIL_VERIFICATION = 'optional'  # 'mandatory', 'optional', or 'none'
+ACCOUNT_EMAIL_VERIFICATION = 'none'
 
 # Rate limiting for login attempts
 ACCOUNT_RATE_LIMITS = {

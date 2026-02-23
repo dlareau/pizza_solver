@@ -4,8 +4,46 @@
 {% block content %}
 <h1 class="title">{{ action }} Vendor</h1>
 
+{% if not selected_group %}
+
+{# Group picker step #}
+<form method="get" action="" style="max-width: 400px;">
+  <div class="field">
+    <label class="label">Select a Group</label>
+    <div class="control">
+      <div class="select is-fullwidth">
+        <select name="group">
+          <option value="">-- Select a group --</option>
+          {% for group in groups %}
+          <option value="{{ group.pk }}">{{ group.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="field">
+    <div class="control">
+      <button class="button is-primary" type="submit">Continue</button>
+      <a class="button is-light ml-2" href="{% url 'vendor_list' %}">Cancel</a>
+    </div>
+  </div>
+</form>
+
+{% else %}
+
+{# Vendor form #}
+<p class="mb-4">
+  <strong>Group:</strong> {{ selected_group.name }}
+  {% if can_change_group %}
+  <a class="ml-3 is-size-7" href="{% url 'vendor_create' %}">Change group</a>
+  {% endif %}
+</p>
+
 <form method="post" style="max-width: 560px;">
   {% csrf_token %}
+  {% if action == 'Create' %}
+  <input type="hidden" name="group" value="{{ selected_group.pk }}">
+  {% endif %}
 
   {% if form.non_field_errors %}
   <div class="notification is-danger is-light">
@@ -36,7 +74,7 @@
           {{ choice.tag }} {{ choice.choice_label }}
         </label>
         {% empty %}
-        <p class="has-text-grey-light">No toppings available. <a href="{% url 'topping_create' %}">Add toppings first.</a></p>
+        <p class="has-text-grey-light">No toppings available. Ask a staff member to add toppings first.</p>
         {% endfor %}
       </div>
     </div>
@@ -54,4 +92,6 @@
     </div>
   </div>
 </form>
+
+{% endif %}
 {% endblock %}

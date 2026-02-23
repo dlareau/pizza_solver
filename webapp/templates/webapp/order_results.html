@@ -2,6 +2,7 @@
 {% block title %}Order #{{ order.id }} Results{% endblock %}
 
 {% block content %}
+
 <h1 class="title">Order #{{ order.id }} Results</h1>
 
 <div class="content">
@@ -11,12 +12,14 @@
     <strong>Mode:</strong> {{ order.get_optimization_mode_display }}<br>
     <strong>Pizzas ordered:</strong> {{ order.num_pizzas }}<br>
     <strong>Participants:</strong>
-    {% for person in order.people.all %}{{ person }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    {% for person in order.people.all %}
+      {{ person }}{% if person.pk in guest_person_ids %} <em class="has-text-grey">(guest)</em>{% endif %}{% if not forloop.last %}, {% endif %}
+    {% endfor %}
   </p>
 </div>
 
 {% if pizzas %}
-<h2 class="subtitle is-4">Pizza Assignments</h2>
+<h2 class="subtitle is-4 mt-4">Pizza Assignments</h2>
 {% for pizza in pizzas %}
 <div class="card mb-4">
   <div class="card-header">
@@ -34,7 +37,9 @@
 
     <p class="mt-2">
       <strong>People:</strong>
-      {% for person in pizza.people.all %}{{ person }}{% if not forloop.last %}, {% endif %}{% endfor %}
+      {% for person in pizza.people.all %}
+        {{ person }}{% if person.pk in guest_person_ids %} <em class="has-text-grey">(guest)</em>{% endif %}{% if not forloop.last %}, {% endif %}
+      {% endfor %}
     </p>
   </div>
 </div>

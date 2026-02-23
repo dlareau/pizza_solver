@@ -1,0 +1,17 @@
+{% extends "webapp/base.html" %}
+{% block title %}Delete {{ group.name }}{% endblock %}
+
+{% block content %}
+<h1 class="title">Delete Group</h1>
+
+<div class="notification is-warning is-light">
+  <p>Are you sure you want to delete the group <strong>{{ group.name }}</strong>?</p>
+  <p class="mt-2">This will remove all memberships. Existing orders will not be deleted.</p>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <button class="button is-danger" type="submit">Yes, delete this group</button>
+  <a class="button is-light ml-2" href="{% url 'group_detail' group.pk %}">Cancel</a>
+</form>
+{% endblock %}

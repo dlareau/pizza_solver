@@ -1,25 +1,26 @@
 """
 Pizza optimization solver.
 
-The solver assigns people to pizzas and selects toppings to maximize satisfaction
-while respecting hard constraints (allergies).
+The solver assigns people to pizzas and selects toppings to maximize
+satisfaction while respecting hard constraints (allergies).
 
 Constraints:
-  - ALLERGY (preference=-2): A person must NEVER be assigned to a pizza containing
-    a topping they are allergic to. This is a hard constraint.
+  - ALLERGY (preference=-2): A participant must NEVER be assigned to a pizza
+    containing a topping they are allergic to. This is a hard constraint.
 
 Soft objectives (by optimization_mode):
-  - 'maximize_likes': Maximize the total LIKE (+1) scores for toppings on each person's pizza.
+  - 'maximize_likes': Maximize the total LIKE (+1) scores for toppings on each
+    participant's pizza.
   - 'minimize_dislikes': Minimize the total DISLIKE (-1) violations.
 
 Input:
   - An Order object (saved to DB) with .vendor, .people, .num_pizzas,
     and .optimization_mode set.
-  - The order's people M2M must already be populated.
+  - The order's people M2M must already be populated (includes guests as Persons).
 
 Output:
-  - A list of saved OrderedPizza objects, each with toppings and people M2M
-    relations fully populated in the database.
+  - A list of saved OrderedPizza objects, each with toppings and people
+    M2M relations fully populated in the database.
 """
 
 import math
@@ -32,25 +33,23 @@ from .models import Order, OrderedPizza, PersonToppingPreference
 def _build_prefs(people, toppings):
     """Build a preference matrix for all (person, topping) pairs.
 
-    Returns a dict mapping (p_idx, t_idx) -> int preference value.
-    Queries the DB in a single hit, then fills in defaults based on
-    each person's unrated_is_dislike flag.
+    Returns a dict mapping (person_index, topping_index) -> int preference.
     """
-    # Fetch all existing preferences in one query
-    existing = {}
-    prefs_qs = PersonToppingPreference.objects.filter(
-        person__in=people,
-        topping__in=toppings,
-    ).values_list('person_id', 'topping_id', 'preference')
-    for person_id, topping_id, pref in prefs_qs:
-        existing[(person_id, topping_id)] = pref
-
     result = {}
+
+    existing = {}
+    if people:
+        prefs_qs = PersonToppingPreference.objects.filter(
+            person__in=people,
+            topping__in=toppings,
+        ).values_list('person_id', 'topping_id', 'preference')
+        for person_id, topping_id, pref in prefs_qs:
+            existing[(person_id, topping_id)] = pref
+
     for p_idx, person in enumerate(people):
         default = PersonToppingPreference.DISLIKE if person.unrated_is_dislike else PersonToppingPreference.NEUTRAL
         for t_idx, topping in enumerate(toppings):
-            key = (person.id, topping.id)
-            result[(p_idx, t_idx)] = existing.get(key, default)
+            result[(p_idx, t_idx)] = existing.get((person.id, topping.id), default)
 
     return result
 
@@ -59,29 +58,30 @@ def solve(order: Order) -> list[OrderedPizza]:
     """
     Run the pizza optimization algorithm for the given order.
 
-    Saves each OrderedPizza and its M2M relations (toppings, people) to the
-    database before returning.
+    Saves each OrderedPizza and its M2M relations (toppings, people) to
+    the database before returning.
 
     Args:
-        order: A saved Order instance with vendor, people, num_pizzas, and
-               optimization_mode populated.
+        order: A saved Order instance with vendor, people, num_pizzas,
+               and optimization_mode populated. Guests are Person objects
+               with user_account=None in order.people.
 
     Returns:
         A list of saved OrderedPizza instances with all M2M relations populated.
 
     Raises:
-        ValueError: If num_pizzas > num_people or order configuration is invalid.
+        ValueError: If num_pizzas > num_participants or order configuration is invalid.
     """
-    num_people = order.people.count()
-    if order.num_pizzas > num_people:
+    people = list(order.people.all())
+    P = len(people)
+
+    if order.num_pizzas > P:
         raise ValueError(
-            f"Cannot have more pizzas ({order.num_pizzas}) than people ({num_people})."
+            f"Cannot have more pizzas ({order.num_pizzas}) than participants ({P})."
         )
 
-    people = list(order.people.all())
     toppings = list(order.vendor.toppings.all())
     K = order.num_pizzas
-    P = len(people)
     T = len(toppings)
 
     prefs = _build_prefs(people, toppings)
@@ -89,7 +89,7 @@ def solve(order: Order) -> list[OrderedPizza]:
     prob = pulp.LpProblem("pizza", pulp.LpMaximize)
 
     # --- Variables ---
-    # x[p,k]: person p assigned to pizza k
+    # x[p,k]: participant p assigned to pizza k
     x = {(p, k): pulp.LpVariable(f"x_{p}_{k}", cat='Binary')
          for p in range(P) for k in range(K)}
     # tv[t,k]: topping t on pizza k
@@ -104,11 +104,11 @@ def solve(order: Order) -> list[OrderedPizza]:
 
     # --- Hard constraints ---
 
-    # 1. Each person on exactly one pizza
+    # 1. Each participant on exactly one pizza
     for p in range(P):
         prob += pulp.lpSum(x[p, k] for k in range(K)) == 1, f"person_{p}_once"
 
-    # 2. Allergy: person p cannot be on pizza k if allergic topping t is there
+    # 2. Allergy: participant p cannot be on pizza k if allergic topping t is there
     for p in range(P):
         for t in range(T):
             if prefs[(p, t)] == PersonToppingPreference.ALLERGY:
@@ -119,15 +119,13 @@ def solve(order: Order) -> list[OrderedPizza]:
     for k in range(K):
         prob += pulp.lpSum(tv[t, k] for t in range(T)) <= 3, f"topping_cap_{k}"
 
-    # 4. Balanced assignment: each pizza gets floor(P/K) or ceil(P/K) people
+    # 4. Balanced assignment: each pizza gets floor(P/K) or ceil(P/K) participants
     lo, hi = P // K, math.ceil(P / K)
     for k in range(K):
         prob += pulp.lpSum(x[p, k] for p in range(P)) >= lo, f"pizza_{k}_lo"
         prob += pulp.lpSum(x[p, k] for p in range(P)) <= hi, f"pizza_{k}_hi"
 
-    # 5. Symmetry breaking: person p cannot be on pizza k > p (for p < K).
-    #    Any optimal solution can be relabeled to satisfy this (sort pizzas by
-    #    their minimum-indexed person), so no optimal solution is lost.
+    # 5. Symmetry breaking: participant p cannot be on pizza k > p (for p < K).
     for p in range(K):
         for k in range(p + 1, K):
             prob += x[p, k] == 0, f"sym_{p}_{k}"
@@ -140,24 +138,20 @@ def solve(order: Order) -> list[OrderedPizza]:
             prob += z[p, t, k] >= x[p, k] + tv[t, k] - 1, f"z_ge_{p}_{t}_{k}"
 
     # --- Objective ---
-    # score[k] = sum_{p,t} pref[p,t] * z[p,t,k]
     score = {k: pulp.lpSum(prefs[(p, t)] * z[p, t, k]
                            for (p, t) in nonzero_pairs)
              for k in range(K)}
 
     if order.optimization_mode == 'minimize_dislikes':
-        # max-min: maximize the minimum pizza score
         M = pulp.LpVariable("M", cat='Continuous')
         for k in range(K):
             prob += score[k] >= M, f"min_score_{k}"
         prob += M
     else:
-        # maximize_likes: maximize total score
         prob += pulp.lpSum(score[k] for k in range(K))
 
     prob.solve(pulp.PULP_CBC_CMD(msg=0, threads=4, timeLimit=20))
 
-    # sol_status: 1=Optimal, 2=IntegerFeasible (timeout with best-so-far solution)
     if prob.sol_status < 1:
         status = pulp.LpStatus[prob.status]
         raise ValueError(f"ILP solver could not find a solution. Status: {status}")
@@ -167,6 +161,7 @@ def solve(order: Order) -> list[OrderedPizza]:
     for k in range(K):
         pizza = OrderedPizza(order=order)
         pizza.save()
+
         pizza.people.set([people[p] for p in range(P) if x[p, k].value() > 0.5])
         pizza.toppings.set([toppings[t] for t in range(T) if tv[t, k].value() > 0.5])
         result.append(pizza)

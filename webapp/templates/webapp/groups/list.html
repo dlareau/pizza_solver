@@ -1,0 +1,41 @@
+{% extends "webapp/base.html" %}
+{% block title %}My Groups{% endblock %}
+
+{% block content %}
+<div class="is-flex is-align-items-center mb-4" style="gap:1rem;">
+  <h1 class="title mb-0">My Groups</h1>
+  <a class="button is-primary is-outlined is-small" href="{% url 'group_create' %}">+ New Group</a>
+</div>
+
+{% if memberships %}
+<div class="columns is-multiline">
+  {% for m in memberships %}
+  <div class="column is-half">
+    <div class="card">
+      <div class="card-content">
+        <p class="title is-5">
+          <a href="{% url 'group_detail' m.group.pk %}">{{ m.group.name }}</a>
+        </p>
+        <p class="subtitle is-6 has-text-grey">
+          {% if m.is_admin %}Admin{% else %}Member{% endif %}
+        </p>
+      </div>
+      <footer class="card-footer">
+        <a href="{% url 'group_detail' m.group.pk %}" class="card-footer-item">View</a>
+        {% if m.is_admin %}
+        <a href="{% url 'group_delete' m.group.pk %}" class="card-footer-item has-text-danger">Delete</a>
+        {% endif %}
+      </footer>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="box" style="max-width: 560px;">
+  <p class="mb-3">You're not in any groups yet. Groups are how you order pizza with your friends.</p>
+  <p class="mb-3">If someone you know is already using the app, ask them to share their group's invite link with you — you don't need to create your own.</p>
+  <p class="mb-4">If you're the first from your circle to join, go ahead and create a group and invite the others.</p>
+  <a class="button is-danger is-outlined" href="{% url 'group_create' %}">Create a Group</a>
+</div>
+{% endif %}
+{% endblock %}

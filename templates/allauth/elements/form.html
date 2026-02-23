@@ -2,6 +2,11 @@
 <div class="allauth-inner" style="max-width:480px;">
 <form method="{{ attrs.method }}"
       {% if attrs.action %}action="{{ attrs.action }}"{% endif %}>
+    {% if attrs.form.non_field_errors %}
+    <div class="notification is-danger is-light mb-3">
+      {% for error in attrs.form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
     {% slot body %}
     {% endslot %}
     {% slot actions %}

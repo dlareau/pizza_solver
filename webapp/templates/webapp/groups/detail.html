@@ -1,0 +1,69 @@
+{% extends "webapp/base.html" %}
+{% block title %}{{ group.name }}{% endblock %}
+
+{% block content %}
+<div class="is-flex is-align-items-center mb-4" style="gap:1rem;">
+  <h1 class="title mb-0">{{ group.name }}</h1>
+  {% if is_admin %}
+  <a class="button is-danger is-outlined is-small" href="{% url 'group_delete' group.pk %}">Delete Group</a>
+  {% endif %}
+</div>
+
+<h2 class="subtitle is-5">Members</h2>
+<table class="table is-fullwidth is-hoverable" style="max-width:500px;">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Role</th>
+      {% if is_admin %}<th></th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in memberships %}
+    <tr>
+      <td>{{ m.person.name }}</td>
+      <td>{% if m.is_admin %}<span class="tag is-info is-light">Admin</span>{% else %}Member{% endif %}</td>
+      {% if is_admin %}
+      <td>
+        <form method="post" action="{% url 'group_remove_member' group.pk m.person.pk %}" style="display:inline;">
+          {% csrf_token %}
+          <button class="button is-danger is-small is-outlined" type="submit"
+                  onclick="return confirm('Remove {{ m.person.name }} from this group?')">
+            Remove
+          </button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="box mt-4" style="max-width:560px;">
+  <h3 class="subtitle is-6 mb-2">Invite Link</h3>
+  <p class="help mb-3">Share this link with anyone you want to add to the group.</p>
+  <div class="field has-addons">
+    <div class="control is-expanded">
+      <input id="invite-link" class="input is-small" type="text" readonly value="{{ invite_url }}">
+    </div>
+    <div class="control">
+      <button class="button is-info is-small" type="button"
+              onclick="navigator.clipboard.writeText(document.getElementById('invite-link').value);
+                       this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000);">
+        Copy
+      </button>
+    </div>
+  </div>
+  {% if is_admin %}
+  <form method="post" action="{% url 'group_reset_invite' group.pk %}" class="mt-2">
+    {% csrf_token %}
+    <button class="button is-warning is-small is-outlined" type="submit"
+            onclick="return confirm('Reset the invite link? The current link will stop working.')">
+      Reset Link
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+<p class="mt-4"><a class="button is-light" href="{% url 'group_list' %}">&larr; Back to Groups</a></p>
+{% endblock %}

@@ -1,7 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
-from .models import User, Person, Topping, PizzaVendor, PersonToppingPreference, VendorTopping, Order, OrderedPizza
+from .models import (
+    GroupMembership, Order, OrderedPizza,
+    Person, PersonToppingPreference, PizzaGroup, PizzaVendor, Topping, User, VendorTopping,
+)
 
 
 @admin.register(User)
@@ -30,14 +33,30 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
-    """Admin configuration for Person (can exist with or without user account)."""
-    list_display = ('name', 'email', 'user_account', 'unrated_is_dislike')
+    list_display = ('name', 'email', 'user_account', 'guest_for_order', 'unrated_is_dislike')
     search_fields = ('name', 'email')
-    fields = ('name', 'email', 'comments', 'user_account', 'unrated_is_dislike')
-    
+    fields = ('name', 'email', 'comments', 'user_account', 'guest_for_order', 'unrated_is_dislike')
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.select_related('user_account')
+        return qs.select_related('user_account', 'guest_for_order')
+
+
+@admin.register(PizzaGroup)
+class PizzaGroupAdmin(admin.ModelAdmin):
+    list_display = ('name', 'member_count')
+    search_fields = ('name',)
+
+    def member_count(self, obj):
+        return obj.members.count()
+    member_count.short_description = 'Members'
+
+
+@admin.register(GroupMembership)
+class GroupMembershipAdmin(admin.ModelAdmin):
+    list_display = ('group', 'person', 'is_admin')
+    list_filter = ('group', 'is_admin')
+    search_fields = ('group__name', 'person__name', 'person__email')
 
 
 @admin.register(Topping)
@@ -48,10 +67,9 @@ class ToppingAdmin(admin.ModelAdmin):
 
 @admin.register(PizzaVendor)
 class PizzaVendorAdmin(admin.ModelAdmin):
-    list_display = ('name',)
+    list_display = ('name', 'group')
     search_fields = ('name',)
-    # Note: toppings uses a through model (VendorTopping),
-    # so it cannot be in filter_horizontal - manage it via VendorToppingAdmin
+    list_filter = ('group',)
 
 
 @admin.register(PersonToppingPreference)
@@ -70,9 +88,10 @@ class VendorToppingAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'host', 'vendor', 'num_pizzas', 'optimization_mode', 'created_at')
+    list_display = ('id', 'host', 'vendor', 'group', 'num_pizzas', 'optimization_mode', 'invite_token', 'created_at')
     list_filter = ('vendor', 'optimization_mode', 'created_at')
     search_fields = ('host__name', 'host__email', 'vendor__name')
+    readonly_fields = ('invite_token',)
     filter_horizontal = ('people',)
     date_hierarchy = 'created_at'
 

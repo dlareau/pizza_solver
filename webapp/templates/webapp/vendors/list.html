@@ -16,6 +16,7 @@
   <thead>
     <tr>
       <th>Name</th>
+      <th>Group</th>
       <th>Toppings</th>
       <th>Actions</th>
     </tr>
@@ -24,6 +25,7 @@
     {% for vendor in vendors %}
     <tr>
       <td>{{ vendor.name }}</td>
+      <td>{{ vendor.group.name|default:"—" }}</td>
       <td>{{ vendor.toppings.count }}</td>
       <td>
         <a class="button is-small is-warning" href="{% url 'vendor_edit' vendor.pk %}">Edit</a>
