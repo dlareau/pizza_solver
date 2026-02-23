@@ -1,49 +1,67 @@
 {% extends "webapp/base.html" %}
-{% block title %}Order #{{ order.id }} Results{% endblock %}
+{% block title %}{{ order.num_pizzas }} Pizza{{ order.num_pizzas|pluralize }} from {{ order.vendor }}{% endblock %}
 
 {% block content %}
 
-<h1 class="title">Order #{{ order.id }} Results</h1>
+<h1 class="title mb-1">{{ order.num_pizzas }} Pizza{{ order.num_pizzas|pluralize }} from {{ order.vendor }}</h1>
 
-<div class="content">
-  <p>
-    <strong>Vendor:</strong> {{ order.vendor }}<br>
-    <strong>Host:</strong> {{ order.host }}<br>
-    <strong>Mode:</strong> {{ order.get_optimization_mode_display }}<br>
-    <strong>Pizzas ordered:</strong> {{ order.num_pizzas }}<br>
-    <strong>Participants:</strong>
-    {% for person in order.people.all %}
-      {{ person }}{% if person.pk in guest_person_ids %} <em class="has-text-grey">(guest)</em>{% endif %}{% if not forloop.last %}, {% endif %}
-    {% endfor %}
-  </p>
+<div class="tags are-medium mb-5">
+  <span class="tag"><strong>Vendor:</strong>&nbsp;{{ order.vendor }}</span>
+  <span class="tag"><strong>Host:</strong>&nbsp;{{ order.host }}</span>
+  <span class="tag"><strong>Pizzas:</strong>&nbsp;{{ order.num_pizzas }}</span>
+  <span class="tag"><strong>People:</strong>&nbsp;{{ order.people.count }}</span>
+  <span class="tag"><strong>Mode:</strong>&nbsp;{{ order.get_optimization_mode_display }}</span>
 </div>
 
 {% if pizzas %}
-<h2 class="subtitle is-4 mt-4">Pizza Assignments</h2>
-{% for pizza in pizzas %}
-<div class="card mb-4">
-  <div class="card-header">
-    <p class="card-header-title">Pizza #{{ forloop.counter }}</p>
-  </div>
-  <div class="card-content">
-    <p>
-      <strong>Toppings:</strong>
-      {% for t in pizza.toppings.all %}
-        <span class="tag is-warning">{{ t }}</span>
-      {% empty %}
-        <em>none</em>
-      {% endfor %}
-    </p>
 
-    <p class="mt-2">
-      <strong>People:</strong>
-      {% for person in pizza.people.all %}
-        {{ person }}{% if person.pk in guest_person_ids %} <em class="has-text-grey">(guest)</em>{% endif %}{% if not forloop.last %}, {% endif %}
-      {% endfor %}
-    </p>
-  </div>
+<p class="heading mb-2">All participants</p>
+<div class="tags are-medium mb-5">
+  {% for person in order.people.all %}
+    {% if person.pk in guest_person_ids %}
+      <span class="tag is-light has-text-weight-semibold">{{ person }} <em class="ml-1 has-text-grey">guest</em></span>
+    {% else %}
+      <span class="tag has-text-weight-semibold">{{ person }}</span>
+    {% endif %}
+  {% endfor %}
 </div>
-{% endfor %}
+
+<p class="heading mb-3">Pizza assignments</p>
+<div class="columns is-multiline">
+  {% for pizza in pizzas %}
+  <div class="column is-half-tablet is-one-third-desktop">
+    <div class="card">
+      <div class="card-header">
+        <p class="card-header-title">
+          Pizza #{{ forloop.counter }}
+          <span class="tag is-light ml-3">{{ pizza.toppings.count }} topping{{ pizza.toppings.count|pluralize }} · {{ pizza.people.count }} person{{ pizza.people.count|pluralize }}</span>
+        </p>
+      </div>
+      <div class="card-content">
+        <p class="heading mb-2">Toppings</p>
+        <div class="tags are-medium mb-4">
+          {% for t in pizza.toppings.all %}
+            <span class="tag is-warning has-text-weight-semibold">{{ t }}</span>
+          {% empty %}
+            <em class="has-text-grey-light">Plain — no toppings</em>
+          {% endfor %}
+        </div>
+
+        <p class="heading mb-2">People</p>
+        <div class="tags are-medium">
+          {% for person in pizza.people.all %}
+            {% if person.pk in guest_person_ids %}
+              <span class="tag is-light has-text-weight-semibold">{{ person }} <em class="ml-1 has-text-grey">guest</em></span>
+            {% else %}
+              <span class="tag has-text-weight-semibold">{{ person }}</span>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
 
 {% else %}
 <div class="notification is-light">
@@ -51,5 +69,6 @@
 </div>
 {% endif %}
 
-<p><a class="button is-light mt-2" href="{% url 'create_order' %}">&larr; Create another order</a></p>
+<a class="button is-light mt-2" href="{% url 'create_order' %}">← Create another order</a>
+
 {% endblock %}

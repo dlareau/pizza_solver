@@ -73,8 +73,19 @@ PAGE_LABELS = [
 class Command(BaseCommand):
     help = "Render all webapp templates to a temp dir and open them in the browser (no DB changes)."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            'template',
+            nargs='?',
+            choices=PAGE_LABELS,
+            help="Template label to preview (omit to select interactively).",
+        )
+
     def handle(self, *args, **options):
-        selected_label = self._prompt_selection()
+        if options['template']:
+            selected_label = options['template']
+        else:
+            selected_label = self._prompt_selection()
         self.stdout.write("Setting up preview data...")
         with transaction.atomic():
             ctx = self._setup_data()
@@ -197,13 +208,23 @@ class Command(BaseCommand):
                 host=person,
                 vendor=vendor,
                 group=group,
-                num_pizzas=1,
+                num_pizzas=3,
                 invite_token=None,
             )
-            solved_order.people.add(person, alice)
-            pizza = OrderedPizza.objects.create(order=solved_order)
-            pizza.toppings.set(toppings[:3])
-            pizza.people.add(person)
+            solved_order.people.set([person, alice])
+        else:
+            solved_order.num_pizzas = 3
+            solved_order.save()
+            solved_order.pizzas.all().delete()
+        pizza1 = OrderedPizza.objects.create(order=solved_order)
+        pizza1.toppings.set(toppings[:3])
+        pizza1.people.add(person)
+        pizza2 = OrderedPizza.objects.create(order=solved_order)
+        pizza2.toppings.set(toppings[3:6])
+        pizza2.people.add(alice)
+        pizza3 = OrderedPizza.objects.create(order=solved_order)
+        pizza3.toppings.set(toppings[6:9])
+        pizza3.people.add(person, alice)
 
         # 9. Solved guest order: invite_token set AND has OrderedPizza children
         #    (renders guests/join.html in "already solved" state)
