@@ -11,6 +11,32 @@ A Django web app for coordinating group pizza orders. Each person records their 
 - The solver (PuLP/CBC) assigns each person to exactly one pizza and picks up to 3 toppings per pizza
 - Two optimization modes: **maximize likes** or **minimize dislikes**
 
+## Running with Docker
+
+```yaml
+# docker-compose.yml
+services:
+  web:
+    image: ghcr.io/dlareau/pizza_solver:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - pizza_data:/data
+    environment:
+      - SECRET_KEY=change-me
+      - DEBUG=False
+      - DB_PATH=/data/db.sqlite3
+
+volumes:
+  pizza_data:
+```
+
+```bash
+docker compose up
+```
+
+Set `ALLOWED_HOSTS` to your domain or IP to restrict access (e.g. `ALLOWED_HOSTS=mypizzasite.com`).
+
 ## Setup
 
 ```bash
