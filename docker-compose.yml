@@ -9,6 +9,7 @@ services:
       - SECRET_KEY=change-me-in-production
       - DEBUG=False
       - ALLOWED_HOSTS=localhost,127.0.0.1
+      #- CSRF_TRUSTED_ORIGINS=https://yourdomain.com
       - DB_PATH=/data/db.sqlite3
 
 volumes:

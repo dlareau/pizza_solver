@@ -26,6 +26,7 @@ services:
       - SECRET_KEY=change-me
       - DEBUG=False
       - DB_PATH=/data/db.sqlite3
+      # - CSRF_TRUSTED_ORIGINS=https://yourdomain.com
 
 volumes:
   pizza_data:
