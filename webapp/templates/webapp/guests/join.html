@@ -1,13 +1,13 @@
 {% extends "webapp/base.html" %}
-{% block title %}Join Order — {{ order.vendor }}{% endblock %}
+{% block title %}Order from {{ order.vendor }}{% endblock %}
 
 {% block content %}
-<h1 class="title">{{ order.vendor }}</h1>
+<h1 class="title">Order from {{ order.vendor }}</h1>
 <p class="subtitle">Set your topping preferences for this pizza order.</p>
 
 {% if already_solved %}
 <div class="notification is-warning is-light">
-  <p>This order has already been solved. No more preferences can be submitted.</p>
+  <p>This order has already been completed. No more preferences can be submitted.</p>
 </div>
 <p><a class="button is-light mt-2" href="/">Home</a></p>
 

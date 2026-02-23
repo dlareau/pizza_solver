@@ -22,7 +22,7 @@
     {% for m in memberships %}
     <tr>
       <td>{{ m.person.name }}</td>
-      <td>{% if m.is_admin %}<span class="tag is-info is-light">Admin</span>{% else %}Member{% endif %}</td>
+      <td>{% if m.is_admin %}<span class="tag is-info is-light">Admin</span>{% else %}<span class="tag is-light">Member</span>{% endif %}</td>
       {% if is_admin %}
       <td>
         <form method="post" action="{% url 'group_remove_member' group.pk m.person.pk %}" style="display:inline;">

@@ -41,8 +41,8 @@
 
 {% if proto_order and invite_url %}
 <div class="box" style="max-width:560px;">
-  <h3 class="subtitle is-6 mb-2">Guest Invite Link</h3>
-  <p class="help mb-3">Share this link with anyone you want to invite to set their topping preferences.</p>
+  <h3 class="subtitle is-6 mb-2">One-Time Guest Link</h3>
+  <p class="help mb-3">Share this link with one-time guests to set their topping preferences. For regular guests, invite them to the group instead.</p>
   <div class="field has-addons">
     <div class="control is-expanded">
       <input id="invite-link" class="input is-small" type="text" readonly value="{{ invite_url }}">
@@ -97,9 +97,9 @@
   <div class="field mt-2">
     <button class="button is-info is-outlined" type="submit" name="invite_guests" value="1"
             id="invite-guests-btn" disabled>
-      Invite Guests &amp; Get Link
+      Invite One-Time Guests
     </button>
-    <p class="help">Locks in the vendor and gives you a shareable link before the order is solved.</p>
+    <p class="help">Generates a shareable link for one-time guests to set their preferences (vendor cannot be changed after this).</p>
   </div>
 
   {% endif %}

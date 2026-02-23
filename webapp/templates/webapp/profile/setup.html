@@ -3,7 +3,7 @@
 
 {% block content %}
 <h1 class="title">Welcome! Set Your Preferences</h1>
-<p class="subtitle">Tell us how you feel about pizza toppings so we can find the best pizza for everyone.</p>
+<p class="subtitle">Topping preferences are used to generate the best pizza selection for the group.</p>
 
 <form method="post" action="?setup=1" style="max-width: 680px;">
   {% csrf_token %}
@@ -15,7 +15,7 @@
   {% endif %}
 
   <div class="field">
-    <label class="label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+    <label class="label" for="{{ form.name.id_for_label }}">Display Name</label>
     <div class="control">
       <input class="input{% if form.name.errors %} is-danger{% endif %}"
              type="text" name="{{ form.name.html_name }}" id="{{ form.name.id_for_label }}"
