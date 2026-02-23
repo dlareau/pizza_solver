@@ -1,6 +1,6 @@
 from django import forms
 from django.forms import CheckboxSelectMultiple, ModelMultipleChoiceField
-from .models import Order, Person, PizzaGroup, PizzaVendor, Topping
+from .models import Order, Person, PizzaGroup, PizzaRestaurant, Topping
 
 
 class CreateOrderForm(forms.Form):
@@ -9,10 +9,10 @@ class CreateOrderForm(forms.Form):
         label="Group",
         empty_label="-- Select a group --",
     )
-    vendor = forms.ModelChoiceField(
-        queryset=PizzaVendor.objects.all(),
-        label="Pizza Vendor",
-        empty_label="-- Select a vendor --",
+    restaurant = forms.ModelChoiceField(
+        queryset=PizzaRestaurant.objects.all(),
+        label="Restaurant",
+        empty_label="-- Select a restaurant --",
     )
     people = forms.ModelMultipleChoiceField(
         queryset=Person.objects.none(),
@@ -43,8 +43,8 @@ class CreateOrderForm(forms.Form):
             self.fields['group'].initial = selected_group.pk
 
             if proto_order is not None:
-                self.fields['vendor'].queryset = PizzaVendor.objects.filter(pk=proto_order.vendor.pk)
-                self.fields['vendor'].widget = forms.HiddenInput()
+                self.fields['restaurant'].queryset = PizzaRestaurant.objects.filter(pk=proto_order.restaurant.pk)
+                self.fields['restaurant'].widget = forms.HiddenInput()
                 guest_persons = proto_order.guest_persons.all()
                 self._guest_pks = set(guest_persons.values_list('pk', flat=True))
                 group_members_excl_host = (
@@ -55,7 +55,7 @@ class CreateOrderForm(forms.Form):
                 self.fields['people'].queryset = (
                     selected_group.members.exclude(pk=host.pk) if host else selected_group.members.all()
                 )
-                self.fields['vendor'].queryset = PizzaVendor.objects.filter(group=selected_group)
+                self.fields['restaurant'].queryset = PizzaRestaurant.objects.filter(group=selected_group)
 
     def clean(self):
         cleaned = super().clean()
@@ -111,7 +111,7 @@ class ToppingForm(forms.ModelForm):
         fields = ['name']
 
 
-class VendorForm(forms.ModelForm):
+class RestaurantForm(forms.ModelForm):
     toppings = ModelMultipleChoiceField(
         queryset=Topping.objects.all(),
         required=False,
@@ -119,7 +119,7 @@ class VendorForm(forms.ModelForm):
     )
 
     class Meta:
-        model = PizzaVendor
+        model = PizzaRestaurant
         fields = ['name']
 
     def __init__(self, *args, **kwargs):

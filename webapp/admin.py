@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 from .models import (
     GroupMembership, Order, OrderedPizza,
-    Person, PersonToppingPreference, PizzaGroup, PizzaVendor, Topping, User, VendorTopping,
+    Person, PersonToppingPreference, PizzaGroup, PizzaRestaurant, Topping, User, RestaurantTopping,
 )
 
 
@@ -65,8 +65,8 @@ class ToppingAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 
-@admin.register(PizzaVendor)
-class PizzaVendorAdmin(admin.ModelAdmin):
+@admin.register(PizzaRestaurant)
+class PizzaRestaurantAdmin(admin.ModelAdmin):
     list_display = ('name', 'group')
     search_fields = ('name',)
     list_filter = ('group',)
@@ -79,18 +79,18 @@ class PersonToppingPreferenceAdmin(admin.ModelAdmin):
     search_fields = ('person__name', 'person__email', 'topping__name')
 
 
-@admin.register(VendorTopping)
-class VendorToppingAdmin(admin.ModelAdmin):
-    list_display = ('vendor', 'topping')
-    list_filter = ('vendor', 'topping')
-    search_fields = ('vendor__name', 'topping__name')
+@admin.register(RestaurantTopping)
+class RestaurantToppingAdmin(admin.ModelAdmin):
+    list_display = ('restaurant', 'topping')
+    list_filter = ('restaurant', 'topping')
+    search_fields = ('restaurant__name', 'topping__name')
 
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'host', 'vendor', 'group', 'num_pizzas', 'optimization_mode', 'invite_token', 'created_at')
-    list_filter = ('vendor', 'optimization_mode', 'created_at')
-    search_fields = ('host__name', 'host__email', 'vendor__name')
+    list_display = ('id', 'host', 'restaurant', 'group', 'num_pizzas', 'optimization_mode', 'invite_token', 'created_at')
+    list_filter = ('restaurant', 'optimization_mode', 'created_at')
+    search_fields = ('host__name', 'host__email', 'restaurant__name')
     readonly_fields = ('invite_token',)
     filter_horizontal = ('people',)
     date_hierarchy = 'created_at'
@@ -99,5 +99,5 @@ class OrderAdmin(admin.ModelAdmin):
 @admin.register(OrderedPizza)
 class OrderedPizzaAdmin(admin.ModelAdmin):
     list_display = ('id', 'order')
-    list_filter = ('order__vendor',)
+    list_filter = ('order__restaurant',)
     filter_horizontal = ('toppings', 'people')

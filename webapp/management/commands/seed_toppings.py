@@ -4,13 +4,13 @@ Management command to seed the toppings table with common pizza toppings.
 Usage:
     python manage.py seed_toppings
 
-Wipes the Topping table (cascading to VendorTopping and PersonToppingPreference)
+Wipes the Topping table (cascading to RestaurantTopping and PersonToppingPreference)
 and inserts a standard list of common pizza toppings.
 """
 
 from django.core.management.base import BaseCommand
 
-from webapp.models import PersonToppingPreference, Topping, VendorTopping
+from webapp.models import PersonToppingPreference, Topping, RestaurantTopping
 
 
 TOPPINGS = [
@@ -58,7 +58,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         PersonToppingPreference.objects.all().delete()
-        VendorTopping.objects.all().delete()
+        RestaurantTopping.objects.all().delete()
         Topping.objects.all().delete()
         self.stdout.write("  Wiped toppings and related preferences.")
 

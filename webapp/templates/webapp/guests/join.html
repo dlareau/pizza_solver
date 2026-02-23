@@ -1,8 +1,8 @@
 {% extends "webapp/base.html" %}
-{% block title %}Order from {{ order.vendor }}{% endblock %}
+{% block title %}Order from {{ order.restaurant }}{% endblock %}
 
 {% block content %}
-<h1 class="title">Order from {{ order.vendor }}</h1>
+<h1 class="title">Order from {{ order.restaurant }}</h1>
 <p class="subtitle">Set your topping preferences for this pizza order.</p>
 
 {% if already_solved %}
@@ -60,7 +60,7 @@
   {% endfor %}
 
   {% else %}
-  <p class="has-text-grey">No toppings have been added to this vendor yet.</p>
+  <p class="has-text-grey">No toppings have been added to this restaurant yet.</p>
   {% endif %}
 
   <div class="field mt-5">
@@ -128,7 +128,7 @@
   {% endfor %}
 
   {% else %}
-  <p class="has-text-grey">No toppings have been added to this vendor yet.</p>
+  <p class="has-text-grey">No toppings have been added to this restaurant yet.</p>
   {% endif %}
 
   <div class="field mt-5">

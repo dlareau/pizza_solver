@@ -5,7 +5,7 @@ Usage:
     python manage.py seed_test_data
 
 Wipes all non-superuser accounts and non-topping data, then creates 27 test users
-(Person01–Person27) with password 'testpass', along with a group, a vendor, and
+(Person01–Person27) with password 'testpass', along with a group, a restaurant, and
 topping preferences sourced from a real group preference survey.
 
 Toppings are created via get_or_create so this command works whether or not
@@ -16,7 +16,7 @@ from django.core.management.base import BaseCommand
 
 from webapp.models import (
     GroupMembership, Order, OrderedPizza, Person, PersonToppingPreference,
-    PizzaGroup, PizzaVendor, Topping, User, VendorTopping,
+    PizzaGroup, PizzaRestaurant, Topping, User, RestaurantTopping,
 )
 
 PEOPLE = [
@@ -52,7 +52,7 @@ PREFERENCES = {
     "Sun Dried Tomatoes":[ 1, 1,-2, 0, 0, 1, 1, 1, 0,-1, 1, 1, 0, 0,-2,-2,-2, 1, 1, 1, 0, 0,-1, 1, 0, 0, 0],
 }
 
-VENDOR_NAME = "Mario's Pizza"
+RESTAURANT_NAME = "Mario's Pizza"
 GROUP_NAME = "Survey Group"
 TEST_PASSWORD = "testpass"
 
@@ -65,7 +65,7 @@ class Command(BaseCommand):
         toppings = self._ensure_toppings()
         people = self._create_people(toppings)
         group = self._create_group(people)
-        self._create_vendor(toppings, group)
+        self._create_restaurant(toppings, group)
         self.stdout.write(self.style.SUCCESS("Test data seeding complete."))
 
     def _wipe(self):
@@ -74,10 +74,10 @@ class Command(BaseCommand):
         PersonToppingPreference.objects.all().delete()
         GroupMembership.objects.all().delete()
         PizzaGroup.objects.all().delete()
-        VendorTopping.objects.all().delete()
+        RestaurantTopping.objects.all().delete()
         Person.objects.all().delete()
         User.objects.filter(is_superuser=False).delete()
-        PizzaVendor.objects.all().delete()
+        PizzaRestaurant.objects.all().delete()
         self.stdout.write("  Wiped all non-superuser, non-topping data.")
 
     def _ensure_toppings(self):
@@ -123,11 +123,11 @@ class Command(BaseCommand):
         self.stdout.write(f"  Created group '{GROUP_NAME}' with {len(people)} members.")
         return group
 
-    def _create_vendor(self, toppings, group):
-        vendor = PizzaVendor.objects.create(name=VENDOR_NAME, group=group)
-        VendorTopping.objects.bulk_create([
-            VendorTopping(vendor=vendor, topping=topping)
+    def _create_restaurant(self, toppings, group):
+        restaurant = PizzaRestaurant.objects.create(name=RESTAURANT_NAME, group=group)
+        RestaurantTopping.objects.bulk_create([
+            RestaurantTopping(restaurant=restaurant, topping=topping)
             for topping in toppings.values()
         ])
-        self.stdout.write(f"  Created vendor '{VENDOR_NAME}' with {len(toppings)} toppings.")
-        return vendor
+        self.stdout.write(f"  Created restaurant '{RESTAURANT_NAME}' with {len(toppings)} toppings.")
+        return restaurant

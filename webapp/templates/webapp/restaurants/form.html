@@ -1,8 +1,8 @@
 {% extends "webapp/base.html" %}
-{% block title %}{{ action }} Vendor{% endblock %}
+{% block title %}{{ action }} Restaurant{% endblock %}
 
 {% block content %}
-<h1 class="title">{{ action }} Vendor</h1>
+<h1 class="title">{{ action }} Restaurant</h1>
 
 {% if not selected_group %}
 
@@ -24,18 +24,18 @@
   <div class="field">
     <div class="control">
       <button class="button is-primary" type="submit">Continue</button>
-      <a class="button is-light ml-2" href="{% url 'vendor_list' %}">Cancel</a>
+      <a class="button is-light ml-2" href="{% url 'restaurant_list' %}">Cancel</a>
     </div>
   </div>
 </form>
 
 {% else %}
 
-{# Vendor form #}
+{# Restaurant form #}
 <p class="mb-4">
   <strong>Group:</strong> {{ selected_group.name }}
   {% if can_change_group %}
-  <a class="ml-3 is-size-7" href="{% url 'vendor_create' %}">Change group</a>
+  <a class="ml-3 is-size-7" href="{% url 'restaurant_create' %}">Change group</a>
   {% endif %}
 </p>
 
@@ -112,7 +112,7 @@
       <button class="button is-primary" type="submit">{{ action }}</button>
     </div>
     <div class="control">
-      <a class="button is-light" href="{% url 'vendor_list' %}">Cancel</a>
+      <a class="button is-light" href="{% url 'restaurant_list' %}">Cancel</a>
     </div>
   </div>
 </form>

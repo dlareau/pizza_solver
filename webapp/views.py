@@ -12,11 +12,11 @@ from django.urls import reverse
 
 from .forms import (
     CreateOrderForm, GuestPreferenceForm, ImportForm,
-    MergeToppingForm, PersonProfileForm, PizzaGroupForm, ToppingForm, VendorForm,
+    MergeToppingForm, PersonProfileForm, PizzaGroupForm, ToppingForm, RestaurantForm,
 )
 from .models import (
     GroupMembership, Order, OrderedPizza,
-    Person, PersonToppingPreference, PizzaGroup, Topping, PizzaVendor, VendorTopping,
+    Person, PersonToppingPreference, PizzaGroup, Topping, PizzaRestaurant, RestaurantTopping,
 )
 from .solver import solve
 
@@ -158,20 +158,20 @@ def create_order(request):
             selected_group = proto_order.group
 
         if 'invite_guests' in request.POST:
-            vendor_id = request.POST.get('vendor')
-            if not vendor_id or not selected_group:
-                messages.error(request, "Please select a vendor before inviting guests.")
+            restaurant_id = request.POST.get('restaurant')
+            if not restaurant_id or not selected_group:
+                messages.error(request, "Please select a restaurant before inviting guests.")
                 form = CreateOrderForm(request.POST, host=person, selected_group=selected_group)
                 return render(request, 'webapp/order_create.html', {
                     'form': form, 'host': person, 'selected_group': selected_group,
                     'groups': groups, 'can_change_group': len(groups) > 1,
                     'proto_order': None, 'invite_url': None, 'guest_person_ids_str': set(),
                 })
-            vendor = get_object_or_404(PizzaVendor, pk=vendor_id, group=selected_group)
+            restaurant = get_object_or_404(PizzaRestaurant, pk=restaurant_id, group=selected_group)
             order = Order.objects.create(
                 host=person,
                 group=selected_group,
-                vendor=vendor,
+                restaurant=restaurant,
                 num_pizzas=1,
                 optimization_mode='maximize_likes',
                 invite_token=uuid.uuid4(),
@@ -192,7 +192,7 @@ def create_order(request):
             else:
                 target_order = Order.objects.create(
                     host=person,
-                    vendor=data['vendor'],
+                    restaurant=data['restaurant'],
                     num_pizzas=data['num_pizzas'],
                     optimization_mode=data['optimization_mode'],
                     group=data['group'],
@@ -232,7 +232,7 @@ def create_order(request):
                     'people': list(participants_excl_host.values_list('pk', flat=True)),
                     'num_pizzas': proto_order.num_pizzas,
                     'optimization_mode': proto_order.optimization_mode,
-                    'vendor': proto_order.vendor.pk,
+                    'restaurant': proto_order.restaurant.pk,
                     'group': selected_group.pk,
                 },
             )
@@ -299,7 +299,7 @@ def order_cancel_invite(request, order_id):
 def order_join(request, invite_token):
     """No-auth guest join page. Session dedup prevents duplicate entries."""
     order = get_object_or_404(Order, invite_token=invite_token)
-    toppings = list(order.vendor.toppings.all().order_by('name'))
+    toppings = list(order.restaurant.toppings.all().order_by('name'))
     session_key = f'guest_person_{order.pk}'
 
     if order.pizzas.exists():
@@ -535,12 +535,12 @@ def topping_merge(request, pk):
                     pref.topping = target
                     pref.save()
 
-            for vt in VendorTopping.objects.filter(topping=topping):
-                if VendorTopping.objects.filter(vendor=vt.vendor, topping=target).exists():
-                    vt.delete()
+            for rt in RestaurantTopping.objects.filter(topping=topping):
+                if RestaurantTopping.objects.filter(restaurant=rt.restaurant, topping=target).exists():
+                    rt.delete()
                 else:
-                    vt.topping = target
-                    vt.save()
+                    rt.topping = target
+                    rt.save()
 
             for pizza in OrderedPizza.objects.filter(toppings=topping):
                 pizza.toppings.add(target)
@@ -576,25 +576,25 @@ def topping_delete(request, pk):
 
 
 # ---------------------------------------------------------------------------
-# Vendor CRUD
+# Restaurant CRUD
 # ---------------------------------------------------------------------------
 
 @login_required
-def vendor_list(request):
+def restaurant_list(request):
     person = get_object_or_404(Person, user_account=request.user)
     group_ids = person.pizza_groups.values_list('pk', flat=True)
-    vendors = (
-        PizzaVendor.objects
+    restaurants = (
+        PizzaRestaurant.objects
         .filter(group__in=group_ids)
         .select_related('group')
         .prefetch_related('toppings')
         .order_by('name')
     )
-    return render(request, 'webapp/vendors/list.html', {'vendors': vendors})
+    return render(request, 'webapp/restaurants/list.html', {'restaurants': restaurants})
 
 
 @login_required
-def vendor_create(request):
+def restaurant_create(request):
     person = get_object_or_404(Person, user_account=request.user)
     groups = list(person.pizza_groups.all())
 
@@ -610,24 +610,24 @@ def vendor_create(request):
     if request.method == 'POST':
         selected_group = _get_selected_group(request.POST)
         if not selected_group:
-            messages.error(request, "A valid group is required to create a vendor.")
-            return redirect('vendor_create')
-        form = VendorForm(request.POST)
+            messages.error(request, "A valid group is required to create a restaurant.")
+            return redirect('restaurant_create')
+        form = RestaurantForm(request.POST)
         if form.is_valid():
-            vendor = form.save(commit=False)
-            vendor.group = selected_group
-            vendor.save()
+            restaurant = form.save(commit=False)
+            restaurant.group = selected_group
+            restaurant.save()
             for topping in form.cleaned_data['toppings']:
-                VendorTopping.objects.create(vendor=vendor, topping=topping)
-            messages.success(request, f"Vendor '{vendor}' created.")
-            return redirect('vendor_list')
+                RestaurantTopping.objects.create(restaurant=restaurant, topping=topping)
+            messages.success(request, f"Restaurant '{restaurant}' created.")
+            return redirect('restaurant_list')
     else:
         selected_group = _get_selected_group(request.GET)
         if selected_group is None and len(groups) == 1:
             selected_group = groups[0]
-        form = VendorForm()
+        form = RestaurantForm()
 
-    return render(request, 'webapp/vendors/form.html', {
+    return render(request, 'webapp/restaurants/form.html', {
         'form': form,
         'action': 'Create',
         'selected_group': selected_group,
@@ -637,45 +637,45 @@ def vendor_create(request):
 
 
 @login_required
-def vendor_edit(request, pk):
-    vendor = get_object_or_404(PizzaVendor, pk=pk)
+def restaurant_edit(request, pk):
+    restaurant = get_object_or_404(PizzaRestaurant, pk=pk)
     person = get_object_or_404(Person, user_account=request.user)
-    if not vendor.group or not person.pizza_groups.filter(pk=vendor.group_id).exists():
-        return HttpResponseForbidden("You don't have permission to edit this vendor.")
+    if not restaurant.group or not person.pizza_groups.filter(pk=restaurant.group_id).exists():
+        return HttpResponseForbidden("You don't have permission to edit this restaurant.")
     if request.method == 'POST':
-        form = VendorForm(request.POST, instance=vendor)
+        form = RestaurantForm(request.POST, instance=restaurant)
         if form.is_valid():
-            vendor = form.save()
+            restaurant = form.save()
             selected = set(form.cleaned_data['toppings'])
-            existing = set(vendor.toppings.all())
-            VendorTopping.objects.filter(vendor=vendor, topping__in=existing - selected).delete()
+            existing = set(restaurant.toppings.all())
+            RestaurantTopping.objects.filter(restaurant=restaurant, topping__in=existing - selected).delete()
             for topping in selected - existing:
-                VendorTopping.objects.create(vendor=vendor, topping=topping)
-            messages.success(request, f"Vendor '{vendor}' updated.")
-            return redirect('vendor_list')
+                RestaurantTopping.objects.create(restaurant=restaurant, topping=topping)
+            messages.success(request, f"Restaurant '{restaurant}' updated.")
+            return redirect('restaurant_list')
     else:
-        form = VendorForm(instance=vendor)
-    return render(request, 'webapp/vendors/form.html', {
+        form = RestaurantForm(instance=restaurant)
+    return render(request, 'webapp/restaurants/form.html', {
         'form': form,
         'action': 'Edit',
-        'vendor': vendor,
-        'selected_group': vendor.group,
+        'restaurant': restaurant,
+        'selected_group': restaurant.group,
         'can_change_group': False,
     })
 
 
 @login_required
-def vendor_delete(request, pk):
-    vendor = get_object_or_404(PizzaVendor, pk=pk)
+def restaurant_delete(request, pk):
+    restaurant = get_object_or_404(PizzaRestaurant, pk=pk)
     person = get_object_or_404(Person, user_account=request.user)
-    if not vendor.group or not person.pizza_groups.filter(pk=vendor.group_id).exists():
-        return HttpResponseForbidden("You don't have permission to delete this vendor.")
+    if not restaurant.group or not person.pizza_groups.filter(pk=restaurant.group_id).exists():
+        return HttpResponseForbidden("You don't have permission to delete this restaurant.")
     if request.method == 'POST':
-        name = str(vendor)
-        vendor.delete()
-        messages.success(request, f"Vendor '{name}' deleted.")
-        return redirect('vendor_list')
-    return render(request, 'webapp/vendors/confirm_delete.html', {'vendor': vendor})
+        name = str(restaurant)
+        restaurant.delete()
+        messages.success(request, f"Restaurant '{name}' deleted.")
+        return redirect('restaurant_list')
+    return render(request, 'webapp/restaurants/confirm_delete.html', {'restaurant': restaurant})
 
 
 # ---------------------------------------------------------------------------
@@ -699,8 +699,8 @@ def import_data(request):
             section = None
             toppings_created = 0
             toppings_existed = 0
-            vendors_created = 0
-            vendors_existed = 0
+            restaurants_created = 0
+            restaurants_existed = 0
             warnings = []
 
             for line in lines:
@@ -709,8 +709,8 @@ def import_data(request):
                 if line == '[toppings]':
                     section = 'toppings'
                     continue
-                if line == '[vendors]':
-                    section = 'vendors'
+                if line == '[restaurants]':
+                    section = 'restaurants'
                     continue
 
                 if section == 'toppings':
@@ -720,30 +720,30 @@ def import_data(request):
                     else:
                         toppings_existed += 1
 
-                elif section == 'vendors':
+                elif section == 'restaurants':
                     if ':' in line:
-                        vendor_name, topping_str = line.split(':', 1)
-                        vendor_name = vendor_name.strip()
+                        restaurant_name, topping_str = line.split(':', 1)
+                        restaurant_name = restaurant_name.strip()
                         topping_names = [t.strip() for t in topping_str.split(',') if t.strip()]
                     else:
-                        vendor_name = line
+                        restaurant_name = line
                         topping_names = []
 
-                    if not vendor_name:
-                        warnings.append(f"Could not parse vendor line: {line!r}")
+                    if not restaurant_name:
+                        warnings.append(f"Could not parse restaurant line: {line!r}")
                         continue
 
-                    vendor, created = PizzaVendor.objects.get_or_create(name=vendor_name)
+                    restaurant, created = PizzaRestaurant.objects.get_or_create(name=restaurant_name)
                     if created:
-                        vendors_created += 1
+                        restaurants_created += 1
                     else:
-                        vendors_existed += 1
+                        restaurants_existed += 1
 
                     for topping_name in topping_names:
                         topping, t_created = Topping.objects.get_or_create(name=topping_name)
                         if t_created:
                             toppings_created += 1
-                        VendorTopping.objects.get_or_create(vendor=vendor, topping=topping)
+                        RestaurantTopping.objects.get_or_create(restaurant=restaurant, topping=topping)
 
                 else:
                     warnings.append(f"Line outside any section: {line!r}")
@@ -751,8 +751,8 @@ def import_data(request):
             context['results'] = {
                 'toppings_created': toppings_created,
                 'toppings_existed': toppings_existed,
-                'vendors_created': vendors_created,
-                'vendors_existed': vendors_existed,
+                'restaurants_created': restaurants_created,
+                'restaurants_existed': restaurants_existed,
             }
             context['warnings'] = warnings
 

@@ -2,7 +2,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 
 from .models import (
-    Person, Topping, PizzaVendor, VendorTopping,
+    GroupMembership, Person, PizzaGroup, Topping, PizzaRestaurant, RestaurantTopping,
     PersonToppingPreference, Order, OrderedPizza,
 )
 from .solver import solve
@@ -12,11 +12,15 @@ from .solver import solve
 # Helpers
 # ---------------------------------------------------------------------------
 
-def make_vendor(name="Test Pizza", toppings=None):
-    vendor = PizzaVendor.objects.create(name=name)
+def make_group(name="Test Group"):
+    return PizzaGroup.objects.create(name=name)
+
+
+def make_restaurant(name="Test Pizza", toppings=None, group=None):
+    restaurant = PizzaRestaurant.objects.create(name=name, group=group)
     for t in (toppings or []):
-        VendorTopping.objects.create(vendor=vendor, topping=t)
-    return vendor
+        RestaurantTopping.objects.create(restaurant=restaurant, topping=t)
+    return restaurant
 
 
 def make_person(name, unrated_is_dislike=False, prefs=None):
@@ -31,11 +35,14 @@ def make_person(name, unrated_is_dislike=False, prefs=None):
     return p
 
 
-def make_order(vendor, host, people, num_pizzas=1, optimization_mode='maximize_likes'):
+def make_order(restaurant, host, people, num_pizzas=1, optimization_mode='maximize_likes', group=None):
+    if group is None:
+        group = make_group()
     order = Order.objects.create(
-        host=host, vendor=vendor,
+        host=host, restaurant=restaurant,
         num_pizzas=num_pizzas,
         optimization_mode=optimization_mode,
+        group=group,
     )
     order.people.set(people)
     return order
@@ -78,16 +85,17 @@ class PersonToppingPreferenceModelTests(TestCase):
 
 class OrderModelTests(TestCase):
     def setUp(self):
-        self.vendor = PizzaVendor.objects.create(name="Papa's")
+        self.group = make_group("Papa's Group")
+        self.restaurant = PizzaRestaurant.objects.create(name="Papa's", group=self.group)
         self.person = Person.objects.create(name="Bob", email="bob@test.com")
 
     def test_order_defaults(self):
-        order = Order.objects.create(host=self.person, vendor=self.vendor)
+        order = Order.objects.create(host=self.person, restaurant=self.restaurant, group=self.group)
         self.assertEqual(order.num_pizzas, 1)
         self.assertEqual(order.optimization_mode, 'maximize_likes')
 
     def test_order_str(self):
-        order = Order.objects.create(host=self.person, vendor=self.vendor)
+        order = Order.objects.create(host=self.person, restaurant=self.restaurant, group=self.group)
         self.assertIn("Papa's", str(order))
 
 
@@ -97,9 +105,10 @@ class OrderModelTests(TestCase):
 
 class SolverStubTests(TestCase):
     def setUp(self):
-        self.vendor = make_vendor()
+        self.group = make_group()
+        self.restaurant = make_restaurant(group=self.group)
         self.person = make_person("Charlie")
-        self.order = make_order(self.vendor, self.person, [self.person])
+        self.order = make_order(self.restaurant, self.person, [self.person], group=self.group)
 
     def test_solve_raises_not_implemented(self):
         # Now solve() works; just verify it returns a list without raising
@@ -115,7 +124,8 @@ class CreateOrderViewTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.topping = Topping.objects.create(name="Pepperoni")
-        self.vendor = make_vendor(toppings=[self.topping])
+        self.group = make_group("Alice's Group")
+        self.restaurant = make_restaurant(toppings=[self.topping], group=self.group)
         from webapp.models import User
         self.user = User.objects.create_user(
             username='alice', email='alice@test.com', password='testpass',
@@ -124,6 +134,8 @@ class CreateOrderViewTests(TestCase):
         self.alice.user_account = self.user
         self.alice.save()
         self.bob = make_person("Bob")
+        GroupMembership.objects.create(group=self.group, person=self.alice, is_admin=True)
+        GroupMembership.objects.create(group=self.group, person=self.bob)
         self.client.force_login(self.user)
 
     def test_get_create_order_returns_200(self):
@@ -134,14 +146,14 @@ class CreateOrderViewTests(TestCase):
     def test_post_invalid_form_shows_errors(self):
         response = self.client.post(reverse('create_order'), data={})
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(response.context['form'], 'vendor', 'This field is required.')
+        self.assertFormError(response.context['form'], 'restaurant', 'This field is required.')
 
     def test_post_valid_form_creates_order_and_redirects(self):
         response = self.client.post(reverse('create_order'), data={
-            'vendor': self.vendor.pk,
-            'people': [self.alice.pk, self.bob.pk],
+            'group': self.group.pk,
+            'restaurant': self.restaurant.pk,
+            'people': [self.bob.pk],
             'num_pizzas': 1,
-
             'optimization_mode': 'maximize_likes',
         })
         self.assertEqual(response.status_code, 302)
@@ -151,10 +163,10 @@ class CreateOrderViewTests(TestCase):
     def test_host_auto_added_to_people(self):
         # Alice is host (logged-in user) but not explicitly in people; she should be auto-included.
         response = self.client.post(reverse('create_order'), data={
-            'vendor': self.vendor.pk,
+            'group': self.group.pk,
+            'restaurant': self.restaurant.pk,
             'people': [self.bob.pk],
             'num_pizzas': 1,
-
             'optimization_mode': 'maximize_likes',
         })
         self.assertEqual(response.status_code, 302)
@@ -162,11 +174,12 @@ class CreateOrderViewTests(TestCase):
         self.assertIn(self.alice, order.people.all())
 
     def test_more_pizzas_than_people_shows_error(self):
+        # alice (host) + bob = 2 people, so 5 pizzas should fail
         response = self.client.post(reverse('create_order'), data={
-            'vendor': self.vendor.pk,
-            'people': [self.alice.pk],
+            'group': self.group.pk,
+            'restaurant': self.restaurant.pk,
+            'people': [self.bob.pk],
             'num_pizzas': 5,
-
             'optimization_mode': 'maximize_likes',
         })
         self.assertEqual(response.status_code, 200)
@@ -177,25 +190,29 @@ class OrderResultsViewTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.topping = Topping.objects.create(name="Cheese")
-        self.vendor = make_vendor(toppings=[self.topping])
+        self.group = make_group()
+        self.restaurant = make_restaurant(toppings=[self.topping], group=self.group)
         self.alice = make_person("Alice")
-        self.order = make_order(self.vendor, self.alice, [self.alice])
+        self.order = make_order(self.restaurant, self.alice, [self.alice], group=self.group)
+        # Orders without pizzas redirect; add one so the results page renders
+        self.pizza = OrderedPizza.objects.create(order=self.order)
+        self.pizza.people.set([self.alice])
 
     def test_results_page_returns_200(self):
         url = reverse('order_results', kwargs={'order_id': self.order.pk})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f"Order #{self.order.pk}")
+        self.assertContains(response, "Pizza assignments")
 
     def test_results_page_shows_no_assignments_when_empty(self):
-        url = reverse('order_results', kwargs={'order_id': self.order.pk})
+        # An order without pizzas redirects to create_order instead of showing results
+        empty_order = make_order(self.restaurant, self.alice, [self.alice], group=self.group)
+        url = reverse('order_results', kwargs={'order_id': empty_order.pk})
         response = self.client.get(url)
-        self.assertContains(response, "No pizza assignments")
+        self.assertEqual(response.status_code, 302)
 
     def test_results_page_shows_pizza_when_assigned(self):
-        pizza = OrderedPizza.objects.create(order=self.order)
-        pizza.people.set([self.alice])
-        pizza.toppings.set([self.topping])
+        self.pizza.toppings.set([self.topping])
         url = reverse('order_results', kwargs={'order_id': self.order.pk})
         response = self.client.get(url)
         self.assertContains(response, "Pizza #1")
@@ -223,10 +240,10 @@ class SolverTests(TestCase):
     def test_allergy_never_violated(self):
         """No person should appear on a pizza containing their allergen."""
         t_pep, t_mush = self._make_toppings("Pepperoni", "Mushroom")
-        vendor = make_vendor(toppings=[t_pep, t_mush])
+        restaurant = make_restaurant(toppings=[t_pep, t_mush])
         alice = make_person("Alice", prefs={t_pep: PersonToppingPreference.ALLERGY})
         bob = make_person("Bob", prefs={t_pep: PersonToppingPreference.LIKE})
-        order = make_order(vendor, alice, [alice, bob], num_pizzas=1)
+        order = make_order(restaurant, alice, [alice, bob], num_pizzas=1)
 
         pizzas = solve(order)
 
@@ -248,9 +265,9 @@ class SolverTests(TestCase):
     def test_topping_cap(self):
         """No pizza half should have more than 3 toppings."""
         tops = self._make_toppings("A", "B", "C", "D", "E")
-        vendor = make_vendor(name="Cap Vendor", toppings=tops)
+        restaurant = make_restaurant(name="Cap Restaurant", toppings=tops)
         alice = make_person("AliceCap", prefs={t: PersonToppingPreference.LIKE for t in tops})
-        order = make_order(vendor, alice, [alice], num_pizzas=1)
+        order = make_order(restaurant, alice, [alice], num_pizzas=1)
 
         pizzas = solve(order)
 
@@ -262,11 +279,11 @@ class SolverTests(TestCase):
     def test_every_person_assigned(self):
         """All people in the order appear on exactly one pizza."""
         tops = self._make_toppings("Olive", "Bacon")
-        vendor = make_vendor(name="Assign Vendor", toppings=tops)
+        restaurant = make_restaurant(name="Assign Restaurant", toppings=tops)
         alice = make_person("AliceA")
         bob = make_person("BobA")
         charlie = make_person("CharlieA")
-        order = make_order(vendor, alice, [alice, bob, charlie], num_pizzas=2)
+        order = make_order(restaurant, alice, [alice, bob, charlie], num_pizzas=2)
 
         pizzas = solve(order)
 
@@ -282,10 +299,10 @@ class SolverTests(TestCase):
     def test_every_pizza_has_person(self):
         """No pizza should be empty."""
         tops = self._make_toppings("Onion", "Pepper")
-        vendor = make_vendor(name="NonEmpty Vendor", toppings=tops)
+        restaurant = make_restaurant(name="NonEmpty Restaurant", toppings=tops)
         alice = make_person("AliceNE")
         bob = make_person("BobNE")
-        order = make_order(vendor, alice, [alice, bob], num_pizzas=2)
+        order = make_order(restaurant, alice, [alice, bob], num_pizzas=2)
 
         pizzas = solve(order)
 
@@ -297,9 +314,9 @@ class SolverTests(TestCase):
     def test_maximize_likes_prefers_liked_toppings(self):
         """In maximize_likes mode, a liked topping should appear on the pizza."""
         t_like, t_neutral = self._make_toppings("LikedTopping", "NeutralTopping")
-        vendor = make_vendor(name="Likes Vendor", toppings=[t_like, t_neutral])
+        restaurant = make_restaurant(name="Likes Restaurant", toppings=[t_like, t_neutral])
         alice = make_person("AliceLikes", prefs={t_like: PersonToppingPreference.LIKE})
-        order = make_order(vendor, alice, [alice], num_pizzas=1, optimization_mode='maximize_likes')
+        order = make_order(restaurant, alice, [alice], num_pizzas=1, optimization_mode='maximize_likes')
 
         pizzas = solve(order)
 
@@ -315,12 +332,12 @@ class SolverTests(TestCase):
         # maximize_likes might put all liked toppings on one pizza
         # minimize_dislikes should ensure a more balanced assignment
         t1, t2 = self._make_toppings("MinDisT1", "MinDisT2")
-        vendor = make_vendor(name="MinDis Vendor", toppings=[t1, t2])
+        restaurant = make_restaurant(name="MinDis Restaurant", toppings=[t1, t2])
         alice = make_person("AliceMD", prefs={t1: PersonToppingPreference.LIKE, t2: PersonToppingPreference.DISLIKE})
         bob = make_person("BobMD", prefs={t2: PersonToppingPreference.LIKE, t1: PersonToppingPreference.DISLIKE})
         people = [alice, bob]
 
-        order_md = make_order(vendor, alice, people, num_pizzas=2, optimization_mode='minimize_dislikes')
+        order_md = make_order(restaurant, alice, people, num_pizzas=2, optimization_mode='minimize_dislikes')
         pizzas_md = solve(order_md)
 
         # Each person should be on a separate pizza
@@ -343,11 +360,11 @@ class SolverTests(TestCase):
     def test_unrated_is_dislike_excludes_unrated_toppings(self):
         """When unrated_is_dislike=True, unrated toppings should not appear on pizza."""
         t_unrated, t_liked = self._make_toppings("UnratedTop", "LikedTop2")
-        vendor = make_vendor(name="Unrated Vendor", toppings=[t_unrated, t_liked])
+        restaurant = make_restaurant(name="Unrated Restaurant", toppings=[t_unrated, t_liked])
         # Person has unrated_is_dislike=True and only likes t_liked
         alice = make_person("AliceUnrated", unrated_is_dislike=True,
                             prefs={t_liked: PersonToppingPreference.LIKE})
-        order = make_order(vendor, alice, [alice], num_pizzas=1, optimization_mode='maximize_likes')
+        order = make_order(restaurant, alice, [alice], num_pizzas=1, optimization_mode='maximize_likes')
 
         pizzas = solve(order)
 
@@ -362,14 +379,14 @@ class SolverTests(TestCase):
         """When unrated_is_dislike=False, unrated toppings may appear on pizza."""
         # To force the solver to pick the unrated topping, make it the only available one
         t_unrated, = self._make_toppings("NeutralUnrated")
-        vendor = make_vendor(name="Neutral Vendor", toppings=[t_unrated])
+        restaurant = make_restaurant(name="Neutral Restaurant", toppings=[t_unrated])
         # Person has no preferences recorded (default neutral) and unrated_is_dislike=False
         alice = make_person("AliceNeutral", unrated_is_dislike=False)
         # Give alice a LIKE for the unrated topping so solver picks it
         PersonToppingPreference.objects.create(
             person=alice, topping=t_unrated, preference=PersonToppingPreference.LIKE
         )
-        order = make_order(vendor, alice, [alice], num_pizzas=1, optimization_mode='maximize_likes')
+        order = make_order(restaurant, alice, [alice], num_pizzas=1, optimization_mode='maximize_likes')
 
         pizzas = solve(order)
 

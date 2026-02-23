@@ -22,14 +22,14 @@ from django.test import Client
 
 from webapp.models import (
     GroupMembership, Order, OrderedPizza,
-    Person, PizzaGroup, PizzaVendor, Topping, User, VendorTopping,
+    Person, PizzaGroup, PizzaRestaurant, Topping, User, RestaurantTopping,
 )
 
 PREVIEW_EMAIL = "preview@pizza.test"
 ALICE_EMAIL   = "alice@pizza.test"
 GROUP_NAME    = "Preview Group"
 GROUP2_NAME   = "Preview Group 2"
-VENDOR_NAME   = "Preview Pizza"
+RESTAURANT_NAME = "Preview Pizza"
 PREVIEW_TOPPINGS = [
     "Preview Cheese",
     "Preview Pepperoni",
@@ -56,10 +56,10 @@ PAGE_LABELS = [
     'group_detail',
     'group_form_create',
     'group_confirm_delete',
-    'vendor_list',
-    'vendor_form_create',
-    'vendor_form_multi_group',
-    'vendor_confirm_delete',
+    'restaurant_list',
+    'restaurant_form_create',
+    'restaurant_form_multi_group',
+    'restaurant_confirm_delete',
     'topping_list',
     'topping_form_create',
     'topping_merge',
@@ -166,29 +166,29 @@ class Command(BaseCommand):
             t, _ = Topping.objects.get_or_create(name=name)
             toppings.append(t)
 
-        # 6. Vendor in preview group with all preview toppings
-        vendor, _ = PizzaVendor.objects.get_or_create(
-            name=VENDOR_NAME,
+        # 6. Restaurant in preview group with all preview toppings
+        restaurant, _ = PizzaRestaurant.objects.get_or_create(
+            name=RESTAURANT_NAME,
             defaults={'group': group},
         )
-        if vendor.group_id != group.pk:
-            vendor.group = group
-            vendor.save()
+        if restaurant.group_id != group.pk:
+            restaurant.group = group
+            restaurant.save()
         for t in toppings:
-            VendorTopping.objects.get_or_create(vendor=vendor, topping=t)
+            RestaurantTopping.objects.get_or_create(restaurant=restaurant, topping=t)
 
         # 7. Proto-order: invite_token set, no OrderedPizza children
         #    (renders guest-invite mode of order_create.html and first-time guests/join.html)
         proto_order = (
             Order.objects
-            .filter(host=person, vendor=vendor, group=group, invite_token__isnull=False)
+            .filter(host=person, restaurant=restaurant, group=group, invite_token__isnull=False)
             .exclude(pk__in=OrderedPizza.objects.values('order_id'))
             .first()
         )
         if proto_order is None:
             proto_order = Order.objects.create(
                 host=person,
-                vendor=vendor,
+                restaurant=restaurant,
                 group=group,
                 num_pizzas=2,
                 invite_token=uuid.uuid4(),
@@ -199,14 +199,14 @@ class Command(BaseCommand):
         #    (renders order_results.html)
         solved_order = (
             Order.objects
-            .filter(host=person, vendor=vendor, group=group, invite_token__isnull=True)
+            .filter(host=person, restaurant=restaurant, group=group, invite_token__isnull=True)
             .filter(pk__in=OrderedPizza.objects.values('order_id'))
             .first()
         )
         if solved_order is None:
             solved_order = Order.objects.create(
                 host=person,
-                vendor=vendor,
+                restaurant=restaurant,
                 group=group,
                 num_pizzas=3,
                 invite_token=None,
@@ -230,14 +230,14 @@ class Command(BaseCommand):
         #    (renders guests/join.html in "already solved" state)
         solved_guest_order = (
             Order.objects
-            .filter(host=person, vendor=vendor, group=group, invite_token__isnull=False)
+            .filter(host=person, restaurant=restaurant, group=group, invite_token__isnull=False)
             .filter(pk__in=OrderedPizza.objects.values('order_id'))
             .first()
         )
         if solved_guest_order is None:
             solved_guest_order = Order.objects.create(
                 host=person,
-                vendor=vendor,
+                restaurant=restaurant,
                 group=group,
                 num_pizzas=1,
                 invite_token=uuid.uuid4(),
@@ -248,7 +248,7 @@ class Command(BaseCommand):
             pizza.people.add(person)
 
         self.stdout.write(
-            f"  group={group.pk}  group2={group2.pk}  vendor={vendor.pk}  "
+            f"  group={group.pk}  group2={group2.pk}  restaurant={restaurant.pk}  "
             f"proto={proto_order.pk}  solved={solved_order.pk}  "
             f"solved-guest={solved_guest_order.pk}"
         )
@@ -260,7 +260,7 @@ class Command(BaseCommand):
             'group': group,
             'group2': group2,
             'toppings': toppings,
-            'vendor': vendor,
+            'restaurant': restaurant,
             'proto_order': proto_order,
             'solved_order': solved_order,
             'solved_guest_order': solved_guest_order,
@@ -272,7 +272,7 @@ class Command(BaseCommand):
 
     def _build_pages(self, ctx) -> list:
         g   = ctx['group']
-        v   = ctx['vendor']
+        r   = ctx['restaurant']
         t   = ctx['toppings'][0]
         po  = ctx['proto_order']
         so  = ctx['solved_order']
@@ -294,10 +294,10 @@ class Command(BaseCommand):
             ('group_detail',          f'/groups/{g.pk}/',                     True),
             ('group_form_create',     '/groups/new/',                         True),
             ('group_confirm_delete',  f'/groups/{g.pk}/delete/',              True),
-            ('vendor_list',           '/vendors/',                            True),
-            ('vendor_form_create',    f'/vendors/new/?group={g.pk}',          True),
-            ('vendor_form_multi_group',  '/vendors/new/',                     True),
-            ('vendor_confirm_delete', f'/vendors/{v.pk}/delete/',             True),
+            ('restaurant_list',       '/restaurants/',                        True),
+            ('restaurant_form_create', f'/restaurants/new/?group={g.pk}',    True),
+            ('restaurant_form_multi_group', '/restaurants/new/',              True),
+            ('restaurant_confirm_delete', f'/restaurants/{r.pk}/delete/',    True),
             ('topping_list',          '/toppings/',                           True),
             ('topping_form_create',   '/toppings/new/',                       True),
             ('topping_merge',         f'/toppings/{t.pk}/merge/',             True),

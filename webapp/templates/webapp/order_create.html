@@ -59,16 +59,16 @@
 {% endif %}
 
 {% if proto_order %}
-{# Vendor locked section — separate form to avoid nesting #}
+{# Restaurant locked section — separate form to avoid nesting #}
 <div class="field" style="max-width:560px;">
-  <label class="label">Pizza Vendor</label>
+  <label class="label">Restaurant</label>
   <div class="is-flex is-align-items-center" style="gap: 0.75rem;">
-    <span class="is-size-6">{{ proto_order.vendor }}</span>
+    <span class="is-size-6">{{ proto_order.restaurant }}</span>
     <form method="post" action="{% url 'order_cancel_invite' proto_order.id %}"
-          onsubmit="return confirm('Switching vendor will remove all guests and their preferences. Are you sure?');"
+          onsubmit="return confirm('Switching restaurant will remove all guests and their preferences. Are you sure?');"
           style="display:inline; margin:0;">
       {% csrf_token %}
-      <button class="button is-warning is-outlined is-small" type="submit">Switch Vendor</button>
+      <button class="button is-warning is-outlined is-small" type="submit">Switch Restaurant</button>
     </form>
   </div>
 </div>
@@ -79,18 +79,18 @@
   {{ form.group }} {# hidden input #}
   {% if proto_order %}
   <input type="hidden" name="proto_order_id" value="{{ proto_order.pk }}">
-  {{ form.vendor }} {# hidden input — locked vendor #}
+  {{ form.restaurant }} {# hidden input — locked restaurant #}
   {% else %}
 
   <div class="field">
-    <label class="label" for="{{ form.vendor.id_for_label }}">{{ form.vendor.label }}</label>
+    <label class="label" for="{{ form.restaurant.id_for_label }}">{{ form.restaurant.label }}</label>
     <div class="control">
       <div class="select is-fullwidth">
-        {{ form.vendor }}
+        {{ form.restaurant }}
       </div>
     </div>
-    {% if form.vendor.errors %}
-    <p class="help is-danger">{% for e in form.vendor.errors %}{{ e }}{% endfor %}</p>
+    {% if form.restaurant.errors %}
+    <p class="help is-danger">{% for e in form.restaurant.errors %}{{ e }}{% endfor %}</p>
     {% endif %}
   </div>
 
@@ -99,7 +99,7 @@
             id="invite-guests-btn" disabled>
       Invite One-Time Guests
     </button>
-    <p class="help">Generates a shareable link for one-time guests to set their preferences (vendor cannot be changed after this).</p>
+    <p class="help">Generates a shareable link for one-time guests to set their preferences (restaurant cannot be changed after this).</p>
   </div>
 
   {% endif %}
@@ -240,9 +240,9 @@ document.getElementById('order-form').addEventListener('submit', function (e) {
   }
 
   var firstError = null;
-  var vendorSelect = document.querySelector('select[name="{{ form.vendor.html_name }}"]');
-  if (!vendorSelect.value) {
-    firstError = showError(vendorSelect.closest('.control'), 'Please select a vendor.');
+  var restaurantSelect = document.querySelector('select[name="{{ form.restaurant.html_name }}"]');
+  if (!restaurantSelect.value) {
+    firstError = showError(restaurantSelect.closest('.control'), 'Please select a restaurant.');
   }
 
   if (firstError) {
@@ -267,12 +267,12 @@ document.getElementById('order-form').addEventListener('submit', function (e) {
 
 {% if not proto_order %}
 (function () {
-  var vendorSelect = document.getElementById('{{ form.vendor.id_for_label }}');
+  var restaurantSelect = document.getElementById('{{ form.restaurant.id_for_label }}');
   var inviteBtn = document.getElementById('invite-guests-btn');
   function toggleInvite() {
-    inviteBtn.disabled = !vendorSelect.value;
+    inviteBtn.disabled = !restaurantSelect.value;
   }
-  vendorSelect.addEventListener('change', toggleInvite);
+  restaurantSelect.addEventListener('change', toggleInvite);
   toggleInvite();
 }());
 {% endif %}

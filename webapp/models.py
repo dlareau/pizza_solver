@@ -87,19 +87,19 @@ class Topping(models.Model):
         return self.name
 
 
-class PizzaVendor(models.Model):
-    """Represents a pizza vendor/restaurant."""
+class PizzaRestaurant(models.Model):
+    """Represents a pizza restaurant."""
     name = models.CharField(max_length=200)
     group = models.ForeignKey(
         'PizzaGroup',
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name='vendors',
-        help_text="Owning group (null = public vendor, visible to everyone)"
+        related_name='restaurants',
+        help_text="Owning group (null = public restaurant, visible to everyone)"
     )
     metadata = models.JSONField(default=dict, blank=True, null=True)
-    toppings = models.ManyToManyField('Topping', through='VendorTopping', related_name='vendors_offering')
+    toppings = models.ManyToManyField('Topping', through='RestaurantTopping', related_name='restaurants_offering')
 
     def __str__(self):
         return self.name
@@ -135,17 +135,17 @@ class PersonToppingPreference(models.Model):
         return f"{self.person.name} - {self.topping.name} ({self.get_preference_display()})"
 
 
-class VendorTopping(models.Model):
-    """Through model indicating which vendors have which toppings available."""
-    vendor = models.ForeignKey(PizzaVendor, on_delete=models.CASCADE, related_name='available_toppings')
-    topping = models.ForeignKey(Topping, on_delete=models.CASCADE, related_name='vendors')
+class RestaurantTopping(models.Model):
+    """Through model indicating which restaurants have which toppings available."""
+    restaurant = models.ForeignKey(PizzaRestaurant, on_delete=models.CASCADE, related_name='available_toppings')
+    topping = models.ForeignKey(Topping, on_delete=models.CASCADE, related_name='restaurants')
 
     class Meta:
-        unique_together = [['vendor', 'topping']]
-        verbose_name_plural = "Vendor Toppings"
+        unique_together = [['restaurant', 'topping']]
+        verbose_name_plural = "Restaurant Toppings"
 
     def __str__(self):
-        return f"{self.vendor.name} - {self.topping.name}"
+        return f"{self.restaurant.name} - {self.topping.name}"
 
 
 class Order(models.Model):
@@ -156,7 +156,7 @@ class Order(models.Model):
     ]
 
     host = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='hosted_orders')
-    vendor = models.ForeignKey(PizzaVendor, on_delete=models.CASCADE, related_name='orders')
+    restaurant = models.ForeignKey(PizzaRestaurant, on_delete=models.CASCADE, related_name='orders')
     people = models.ManyToManyField(Person, related_name='orders')
     group = models.ForeignKey(
         'PizzaGroup',
@@ -174,7 +174,7 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Order #{self.id} - {self.vendor.name} ({self.created_at.date()})"
+        return f"Order #{self.id} - {self.restaurant.name} ({self.created_at.date()})"
 
 
 class OrderedPizza(models.Model):

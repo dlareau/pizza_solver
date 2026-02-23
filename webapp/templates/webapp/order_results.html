@@ -1,12 +1,12 @@
 {% extends "webapp/base.html" %}
-{% block title %}{{ order.num_pizzas }} Pizza{{ order.num_pizzas|pluralize }} from {{ order.vendor }}{% endblock %}
+{% block title %}{{ order.num_pizzas }} Pizza{{ order.num_pizzas|pluralize }} from {{ order.restaurant }}{% endblock %}
 
 {% block content %}
 
-<h1 class="title mb-1">{{ order.num_pizzas }} Pizza{{ order.num_pizzas|pluralize }} from {{ order.vendor }}</h1>
+<h1 class="title mb-1">{{ order.num_pizzas }} Pizza{{ order.num_pizzas|pluralize }} from {{ order.restaurant }}</h1>
 
 <div class="tags are-medium mb-5">
-  <span class="tag"><strong>Vendor:</strong>&nbsp;{{ order.vendor }}</span>
+  <span class="tag"><strong>Restaurant:</strong>&nbsp;{{ order.restaurant }}</span>
   <span class="tag"><strong>Host:</strong>&nbsp;{{ order.host }}</span>
   <span class="tag"><strong>Pizzas:</strong>&nbsp;{{ order.num_pizzas }}</span>
   <span class="tag"><strong>People:</strong>&nbsp;{{ order.people.count }}</span>

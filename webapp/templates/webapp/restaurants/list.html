@@ -1,0 +1,41 @@
+{% extends "webapp/base.html" %}
+{% block title %}Restaurants{% endblock %}
+
+{% block content %}
+<div class="level">
+  <div class="level-left">
+    <h1 class="title level-item">Restaurants</h1>
+  </div>
+  <div class="level-right">
+    <a class="button is-primary level-item" href="{% url 'restaurant_create' %}">Add Restaurant</a>
+  </div>
+</div>
+
+{% if restaurants %}
+<table class="table is-fullwidth is-striped is-hoverable">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Group</th>
+      <th>Toppings</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for restaurant in restaurants %}
+    <tr>
+      <td>{{ restaurant.name }}</td>
+      <td>{{ restaurant.group.name|default:"—" }}</td>
+      <td>{{ restaurant.toppings.count }}</td>
+      <td>
+        <a class="button is-small is-warning" href="{% url 'restaurant_edit' restaurant.pk %}">Edit</a>
+        <a class="button is-small is-danger" href="{% url 'restaurant_delete' restaurant.pk %}">Delete</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="notification is-light">No restaurants yet. <a href="{% url 'restaurant_create' %}">Add one!</a></div>
+{% endif %}
+{% endblock %}

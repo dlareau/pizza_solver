@@ -14,7 +14,7 @@ Soft objectives (by optimization_mode):
   - 'minimize_dislikes': Minimize the total DISLIKE (-1) violations.
 
 Input:
-  - An Order object (saved to DB) with .vendor, .people, .num_pizzas,
+  - An Order object (saved to DB) with .restaurant, .people, .num_pizzas,
     and .optimization_mode set.
   - The order's people M2M must already be populated (includes guests as Persons).
 
@@ -62,7 +62,7 @@ def solve(order: Order) -> list[OrderedPizza]:
     the database before returning.
 
     Args:
-        order: A saved Order instance with vendor, people, num_pizzas,
+        order: A saved Order instance with restaurant, people, num_pizzas,
                and optimization_mode populated. Guests are Person objects
                with user_account=None in order.people.
 
@@ -80,7 +80,7 @@ def solve(order: Order) -> list[OrderedPizza]:
             f"Cannot have more pizzas ({order.num_pizzas}) than participants ({P})."
         )
 
-    toppings = list(order.vendor.toppings.all())
+    toppings = list(order.restaurant.toppings.all())
     K = order.num_pizzas
     T = len(toppings)
 

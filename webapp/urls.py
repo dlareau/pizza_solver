@@ -14,10 +14,10 @@ urlpatterns = [
     path('toppings/<int:pk>/merge/', views.topping_merge, name='topping_merge'),
     path('toppings/<int:pk>/delete/', views.topping_delete, name='topping_delete'),
 
-    path('vendors/', views.vendor_list, name='vendor_list'),
-    path('vendors/new/', views.vendor_create, name='vendor_create'),
-    path('vendors/<int:pk>/edit/', views.vendor_edit, name='vendor_edit'),
-    path('vendors/<int:pk>/delete/', views.vendor_delete, name='vendor_delete'),
+    path('restaurants/', views.restaurant_list, name='restaurant_list'),
+    path('restaurants/new/', views.restaurant_create, name='restaurant_create'),
+    path('restaurants/<int:pk>/edit/', views.restaurant_edit, name='restaurant_edit'),
+    path('restaurants/<int:pk>/delete/', views.restaurant_delete, name='restaurant_delete'),
 
     path('import/', views.import_data, name='import_data'),
 
