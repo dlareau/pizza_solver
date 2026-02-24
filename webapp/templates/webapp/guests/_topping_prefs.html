@@ -1,0 +1,33 @@
+{% for topping in toppings %}
+<div class="is-flex is-align-items-center mb-2" style="gap:0.75rem; flex-wrap:wrap;">
+  <span style="width:100%; font-weight:500;" class="is-hidden-tablet">{{ topping.name }}</span>
+  <span style="min-width:10rem;" class="is-hidden-mobile">{{ topping.name }}</span>
+  <div class="buttons has-addons mb-0" data-topping="{{ topping.pk }}">
+
+    <button type="button" data-value="-2"
+            class="button is-small pref-btn {% if topping.pk in allergy_ids %}is-danger{% else %}is-light{% endif %}">
+      Allergy
+    </button>
+
+    <button type="button" data-value="-1"
+            class="button is-small pref-btn {% if topping.pk in dislike_ids %}is-warning{% else %}is-light{% endif %}">
+      Dislike
+    </button>
+
+    <button type="button" data-value="0"
+            class="button is-small pref-btn {% if topping.pk in neutral_ids or topping.pk not in allergy_ids and topping.pk not in dislike_ids and topping.pk not in like_ids %}is-info{% else %}is-light{% endif %}">
+      Neutral
+    </button>
+
+    <button type="button" data-value="1"
+            class="button is-small pref-btn {% if topping.pk in like_ids %}is-success{% else %}is-light{% endif %}">
+      Like
+    </button>
+
+  </div>
+  <input type="hidden" name="pref_{{ topping.pk }}"
+         value="{% if topping.pk in allergy_ids %}-2{% elif topping.pk in dislike_ids %}-1{% elif topping.pk in like_ids %}1{% else %}0{% endif %}">
+</div>
+{% empty %}
+<p class="has-text-grey">No toppings have been added to this restaurant yet.</p>
+{% endfor %}

@@ -70,27 +70,29 @@ def profile_edit(request):
         form = PersonProfileForm(request.POST, instance=person)
         if form.is_valid():
             form.save()
+            new_prefs = {}
             for topping in toppings:
-                key = f'pref_{topping.pk}'
-                val_str = request.POST.get(key)
+                val_str = request.POST.get(f'pref_{topping.pk}')
                 if val_str == 'allergy':
-                    val = PersonToppingPreference.ALLERGY
+                    new_prefs[topping.pk] = PersonToppingPreference.ALLERGY
                 elif val_str == 'dislike':
-                    val = PersonToppingPreference.DISLIKE
+                    new_prefs[topping.pk] = PersonToppingPreference.DISLIKE
                 elif val_str == 'neutral':
-                    val = PersonToppingPreference.NEUTRAL
+                    new_prefs[topping.pk] = PersonToppingPreference.NEUTRAL
                 elif val_str == 'like':
-                    val = PersonToppingPreference.LIKE
-                else:
-                    val = None
+                    new_prefs[topping.pk] = PersonToppingPreference.LIKE
 
-                if val is not None:
-                    PersonToppingPreference.objects.update_or_create(
-                        person=person, topping=topping,
-                        defaults={'preference': val},
-                    )
-                else:
-                    PersonToppingPreference.objects.filter(person=person, topping=topping).delete()
+            to_delete = [t.pk for t in toppings if t.pk not in new_prefs]
+            if to_delete:
+                PersonToppingPreference.objects.filter(person=person, topping_id__in=to_delete).delete()
+            if new_prefs:
+                PersonToppingPreference.objects.bulk_create(
+                    [PersonToppingPreference(person=person, topping_id=tid, preference=pref)
+                     for tid, pref in new_prefs.items()],
+                    update_conflicts=True,
+                    unique_fields=['person', 'topping'],
+                    update_fields=['preference'],
+                )
 
             messages.success(request, "Your preferences have been saved.")
             if setup_mode:
@@ -313,17 +315,20 @@ def order_join(request, invite_token):
         guest = Person.objects.filter(pk=existing_pk, guest_for_order=order).first()
         if guest:
             if request.method == 'POST':
+                prefs = []
                 for topping in toppings:
                     val = request.POST.get(f'pref_{topping.pk}', '0')
                     try:
                         pref_val = int(val)
                     except ValueError:
                         pref_val = 0
-                    PersonToppingPreference.objects.update_or_create(
-                        person=guest,
-                        topping=topping,
-                        defaults={'preference': pref_val},
-                    )
+                    prefs.append(PersonToppingPreference(person=guest, topping=topping, preference=pref_val))
+                PersonToppingPreference.objects.bulk_create(
+                    prefs,
+                    update_conflicts=True,
+                    unique_fields=['person', 'topping'],
+                    update_fields=['preference'],
+                )
                 messages.success(request, "Your preferences have been updated!")
                 return redirect('order_join', invite_token=invite_token)
             pref_qs = guest.topping_preferences.filter(topping__in=toppings)
@@ -351,13 +356,15 @@ def order_join(request, invite_token):
             })
         guest = Person.objects.create(name=name, email='', guest_for_order=order)
         order.people.add(guest)
+        prefs = []
         for topping in toppings:
             val = request.POST.get(f'pref_{topping.pk}', '0')
             try:
                 pref_val = int(val)
             except ValueError:
                 pref_val = 0
-            PersonToppingPreference.objects.create(person=guest, topping=topping, preference=pref_val)
+            prefs.append(PersonToppingPreference(person=guest, topping=topping, preference=pref_val))
+        PersonToppingPreference.objects.bulk_create(prefs)
         request.session[session_key] = guest.pk
         messages.success(request, "Your preferences have been saved!")
         return redirect('order_join', invite_token=invite_token)
@@ -617,8 +624,10 @@ def restaurant_create(request):
             restaurant = form.save(commit=False)
             restaurant.group = selected_group
             restaurant.save()
-            for topping in form.cleaned_data['toppings']:
-                RestaurantTopping.objects.create(restaurant=restaurant, topping=topping)
+            RestaurantTopping.objects.bulk_create([
+                RestaurantTopping(restaurant=restaurant, topping=topping)
+                for topping in form.cleaned_data['toppings']
+            ])
             messages.success(request, f"Restaurant '{restaurant}' created.")
             return redirect('restaurant_list')
     else:
@@ -649,8 +658,10 @@ def restaurant_edit(request, pk):
             selected = set(form.cleaned_data['toppings'])
             existing = set(restaurant.toppings.all())
             RestaurantTopping.objects.filter(restaurant=restaurant, topping__in=existing - selected).delete()
-            for topping in selected - existing:
-                RestaurantTopping.objects.create(restaurant=restaurant, topping=topping)
+            RestaurantTopping.objects.bulk_create([
+                RestaurantTopping(restaurant=restaurant, topping=topping)
+                for topping in selected - existing
+            ])
             messages.success(request, f"Restaurant '{restaurant}' updated.")
             return redirect('restaurant_list')
     else:

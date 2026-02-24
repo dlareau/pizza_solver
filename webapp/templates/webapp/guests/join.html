@@ -16,53 +16,10 @@
 {# Returning guest — edit preferences #}
 <p class="mb-4">Welcome back, <strong>{{ guest.name }}</strong>! Update your preferences below.</p>
 
-{% if messages %}
-{% for message in messages %}
-<div class="notification is-{{ message.tags|default:'info' }} is-light mb-3">{{ message }}</div>
-{% endfor %}
-{% endif %}
-
 <form method="post" style="max-width:680px;">
   {% csrf_token %}
-
-  {% if toppings %}
-  <h2 class="subtitle mb-2">Topping Preferences</h2>
-
-  {% for topping in toppings %}
-  <div class="is-flex is-align-items-center mb-2" style="gap:0.75rem;">
-    <span style="min-width:10rem;">{{ topping.name }}</span>
-    <div class="buttons has-addons mb-0" data-topping="{{ topping.pk }}">
-
-      <button type="button" data-value="-2"
-              class="button is-small pref-btn {% if topping.pk in allergy_ids %}is-danger{% else %}is-light{% endif %}">
-        Allergy
-      </button>
-
-      <button type="button" data-value="-1"
-              class="button is-small pref-btn {% if topping.pk in dislike_ids %}is-warning{% else %}is-light{% endif %}">
-        Dislike
-      </button>
-
-      <button type="button" data-value="0"
-              class="button is-small pref-btn {% if topping.pk in neutral_ids or topping.pk not in allergy_ids and topping.pk not in dislike_ids and topping.pk not in like_ids %}is-info is-light{% else %}is-light{% endif %}">
-        Neutral
-      </button>
-
-      <button type="button" data-value="1"
-              class="button is-small pref-btn {% if topping.pk in like_ids %}is-success{% else %}is-light{% endif %}">
-        Like
-      </button>
-
-    </div>
-    <input type="hidden" name="pref_{{ topping.pk }}"
-           value="{% if topping.pk in allergy_ids %}-2{% elif topping.pk in dislike_ids %}-1{% elif topping.pk in like_ids %}1{% else %}0{% endif %}">
-  </div>
-  {% endfor %}
-
-  {% else %}
-  <p class="has-text-grey">No toppings have been added to this restaurant yet.</p>
-  {% endif %}
-
+  {% if toppings %}<h2 class="subtitle mb-2">Topping Preferences</h2>{% endif %}
+  {% include "webapp/guests/_topping_prefs.html" %}
   <div class="field mt-5">
     <div class="control">
       <button class="button is-primary" type="submit">Save Preferences</button>
@@ -77,60 +34,17 @@
 <div class="notification is-danger is-light mb-3">{{ error }}</div>
 {% endif %}
 
-{% if messages %}
-{% for message in messages %}
-<div class="notification is-{{ message.tags|default:'info' }} is-light mb-3">{{ message }}</div>
-{% endfor %}
-{% endif %}
-
 <form method="post" style="max-width:680px;">
   {% csrf_token %}
-
   <div class="field">
     <label class="label">Your Name</label>
     <div class="control">
       <input class="input{% if error %} is-danger{% endif %}" type="text" name="name"
-             placeholder="e.g. Alex" required autofocus>
+             placeholder="Your name" required autofocus>
     </div>
   </div>
-
-  {% if toppings %}
-  <h2 class="subtitle mb-2 mt-4">Topping Preferences</h2>
-
-  {% for topping in toppings %}
-  <div class="is-flex is-align-items-center mb-2" style="gap:0.75rem;">
-    <span style="min-width:10rem;">{{ topping.name }}</span>
-    <div class="buttons has-addons mb-0" data-topping="{{ topping.pk }}">
-
-      <button type="button" data-value="-2"
-              class="button is-small pref-btn is-light">
-        Allergy
-      </button>
-
-      <button type="button" data-value="-1"
-              class="button is-small pref-btn is-light">
-        Dislike
-      </button>
-
-      <button type="button" data-value="0"
-              class="button is-small pref-btn is-info is-light">
-        Neutral
-      </button>
-
-      <button type="button" data-value="1"
-              class="button is-small pref-btn is-light">
-        Like
-      </button>
-
-    </div>
-    <input type="hidden" name="pref_{{ topping.pk }}" value="0">
-  </div>
-  {% endfor %}
-
-  {% else %}
-  <p class="has-text-grey">No toppings have been added to this restaurant yet.</p>
-  {% endif %}
-
+  {% if toppings %}<h2 class="subtitle mb-2 mt-4">Topping Preferences</h2>{% endif %}
+  {% include "webapp/guests/_topping_prefs.html" %}
   <div class="field mt-5">
     <div class="control">
       <button class="button is-primary" type="submit">Submit Preferences</button>
@@ -157,9 +71,6 @@
 
         btn.classList.remove('is-light');
         btn.classList.add(COLOR[val]);
-        if (val === '0') {
-          btn.classList.add('is-light');
-        }
 
         hidden.value = val;
       });

@@ -109,7 +109,7 @@
 
   <div class="field is-grouped">
     <div class="control">
-      <button class="button is-primary" type="submit">{{ action }}</button>
+      <button class="button is-primary" type="submit">{% if action == 'Edit' %}Save Changes{% else %}Create Restaurant{% endif %}</button>
     </div>
     <div class="control">
       <a class="button is-light" href="{% url 'restaurant_list' %}">Cancel</a>
