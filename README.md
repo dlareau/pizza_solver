@@ -16,16 +16,26 @@ A Django web app for coordinating group pizza orders. Each person records their 
 ```yaml
 # docker-compose.yml
 services:
+  db:
+    image: postgres:16
+    volumes:
+      - pizza_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=pizza_solver
+      - POSTGRES_USER=pizza_solver
+      - POSTGRES_PASSWORD=change-me-in-production
+
   web:
     image: ghcr.io/dlareau/pizza_solver:latest
     ports:
       - "8000:8000"
-    volumes:
-      - pizza_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
-      - SECRET_KEY=change-me
+      - SECRET_KEY=change-me-in-production
       - DEBUG=False
-      - DB_PATH=/data/db.sqlite3
+      - DATABASE_URL=postgres://pizza_solver:change-me-in-production@db:5432/pizza_solver
       # - CSRF_TRUSTED_ORIGINS=https://yourdomain.com
 
 volumes:
@@ -37,6 +47,8 @@ docker compose up
 ```
 
 Set `ALLOWED_HOSTS` to your domain or IP to restrict access (e.g. `ALLOWED_HOSTS=mypizzasite.com`).
+
+The `DATABASE_URL` environment variable configures the database. The format is `postgres://user:password@host:port/dbname`. Make sure the password in `DATABASE_URL` matches `POSTGRES_PASSWORD` on the `db` service.
 
 ## Setup
 
@@ -54,3 +66,4 @@ Toppings and restaurants can be managed via the admin panel or bulk-imported thr
 - Python / Django
 - django-allauth (authentication)
 - PuLP + CBC (ILP optimization)
+- PostgreSQL (database)

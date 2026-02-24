@@ -3,4 +3,6 @@ django-allauth>=0.57.0
 pulp>=2.7
 gunicorn
 whitenoise
+psycopg2-binary
+dj-database-url
 

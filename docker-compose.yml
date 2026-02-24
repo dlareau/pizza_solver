@@ -1,16 +1,31 @@
 services:
+  db:
+    image: postgres:16
+    volumes:
+      - pizza_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=pizza_solver
+      - POSTGRES_USER=pizza_solver
+      - POSTGRES_PASSWORD=pizza_solver
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pizza_solver"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   web:
     build: .
     ports:
       - "8000:8000"
-    volumes:
-      - pizza_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       - SECRET_KEY=change-me-in-production
       - DEBUG=False
       - ALLOWED_HOSTS=localhost,127.0.0.1
+      - DATABASE_URL=postgres://pizza_solver:pizza_solver@db:5432/pizza_solver
       #- CSRF_TRUSTED_ORIGINS=https://yourdomain.com
-      - DB_PATH=/data/db.sqlite3
 
 volumes:
   pizza_data:
