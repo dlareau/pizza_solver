@@ -113,7 +113,7 @@ class ToppingForm(forms.ModelForm):
 
 class RestaurantForm(forms.ModelForm):
     toppings = ModelMultipleChoiceField(
-        queryset=Topping.objects.all(),
+        queryset=Topping.objects.order_by('name'),
         required=False,
         widget=CheckboxSelectMultiple,
     )
