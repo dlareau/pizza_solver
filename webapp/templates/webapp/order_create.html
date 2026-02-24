@@ -115,6 +115,7 @@
   <div class="field">
     <label class="label">{{ form.people.label }}</label>
     <p class="help mb-2">Select additional group members to include (you are always included).</p>
+    <p id="people-count" class="help mb-2 has-text-weight-semibold"></p>
 
     <div id="people-tags"
          style="display:flex; flex-wrap:wrap; gap:0.4rem;
@@ -197,6 +198,13 @@ input[type="number"] { -moz-appearance: textfield; }
 
 <script>
 (function () {
+  var countEl = document.getElementById('people-count');
+
+  function updateCount() {
+    var n = document.querySelectorAll('#people-tags input[type="checkbox"]:checked').length;
+    countEl.textContent = n + ' ' + (n === 1 ? 'person' : 'people') + ' selected';
+  }
+
   document.querySelectorAll('#people-tags label').forEach(function (lbl) {
     var cb = lbl.querySelector('input[type="checkbox"]');
     var tag = lbl.querySelector('.person-tag');
@@ -211,8 +219,11 @@ input[type="number"] { -moz-appearance: textfield; }
       } else {
         tag.classList.replace('is-link', 'is-light');
       }
+      updateCount();
     });
   });
+
+  updateCount();
 }());
 
 document.getElementById('pizzas-dec').addEventListener('click', function () {

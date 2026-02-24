@@ -16,7 +16,7 @@ class CreateOrderForm(forms.Form):
     )
     people = forms.ModelMultipleChoiceField(
         queryset=Person.objects.none(),
-        label="People in this order",
+        label="Select people for this order",
         widget=forms.CheckboxSelectMultiple,
         required=False,
     )
