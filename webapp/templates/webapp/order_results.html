@@ -10,10 +10,9 @@
   <span class="tag"><strong>Host:</strong>&nbsp;{{ order.host }}</span>
   <span class="tag"><strong>Pizzas:</strong>&nbsp;{{ order.num_pizzas }}</span>
   <span class="tag"><strong>People:</strong>&nbsp;{{ order.people.count }}</span>
-  <span class="tag"><strong>Mode:</strong>&nbsp;{{ order.get_optimization_mode_display }}</span>
 </div>
 
-{% if pizzas %}
+{% if pizzas_with_scores %}
 
 <p class="heading mb-2">All participants</p>
 <div class="tags are-medium mb-5">
@@ -28,13 +27,14 @@
 
 <p class="heading mb-3">Pizza assignments</p>
 <div class="columns is-multiline">
-  {% for pizza in pizzas %}
+  {% for pizza, score in pizzas_with_scores %}
   <div class="column is-half-tablet is-one-third-desktop">
     <div class="card">
       <div class="card-header">
         <p class="card-header-title">
           Pizza #{{ forloop.counter }}
           <span class="tag is-light ml-3">{{ pizza.toppings.count }} topping{{ pizza.toppings.count|pluralize }} · {{ pizza.people.count }} person{{ pizza.people.count|pluralize }}</span>
+          {% if score is not None %}<span class="tag is-info ml-2">Score: {{ score }}</span>{% endif %}
         </p>
       </div>
       <div class="card-content">

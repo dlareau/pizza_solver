@@ -165,7 +165,7 @@ class Order(models.Model):
     )
     num_pizzas = models.IntegerField(default=1, help_text="Number of pizzas to order")
     optimization_mode = models.CharField(
-        max_length=20, choices=OPTIMIZATION_MODE_CHOICES, default='maximize_likes',
+        max_length=20, choices=OPTIMIZATION_MODE_CHOICES, default='minimize_dislikes',
         help_text="Which optimization strategy to use"
     )
     invite_token = models.UUIDField(null=True, blank=True, unique=True)

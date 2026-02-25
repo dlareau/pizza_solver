@@ -269,6 +269,41 @@ def create_order(request):
     })
 
 
+def _compute_pizza_scores(pizza_list):
+    """Return a dict mapping pizza.pk -> integer score based on preferences."""
+    all_people = {}
+    all_toppings = {}
+    pizza_data = {}
+    for pizza in pizza_list:
+        people = list(pizza.people.all())
+        toppings = list(pizza.toppings.all())
+        pizza_data[pizza.pk] = (people, toppings)
+        for p in people:
+            all_people[p.pk] = p
+        for t in toppings:
+            all_toppings[t.pk] = t
+
+    pref_map = {}
+    if all_people and all_toppings:
+        for person_id, topping_id, pref in PersonToppingPreference.objects.filter(
+            person_id__in=all_people.keys(),
+            topping_id__in=all_toppings.keys(),
+        ).values_list('person_id', 'topping_id', 'preference'):
+            pref_map[(person_id, topping_id)] = pref
+
+    scores = {}
+    for pizza_pk, (people, toppings) in pizza_data.items():
+        score = 0
+        for person in people:
+            default = PersonToppingPreference.DISLIKE if person.unrated_is_dislike else PersonToppingPreference.NEUTRAL
+            for topping in toppings:
+                pref = pref_map.get((person.pk, topping.pk), default)
+                if pref not in (PersonToppingPreference.NEUTRAL, PersonToppingPreference.ALLERGY):
+                    score += pref
+        scores[pizza_pk] = score
+    return scores
+
+
 def order_results(request, order_id):
     """Results page for a solved order. Unsolved orders redirect back to create_order."""
     order = get_object_or_404(Order, pk=order_id)
@@ -276,11 +311,16 @@ def order_results(request, order_id):
         if order.invite_token:
             return redirect(reverse('create_order') + f'?order={order.pk}&group={order.group.pk}')
         return redirect('create_order')
-    pizzas = order.pizzas.prefetch_related('toppings', 'people').all()
+    pizza_list = list(order.pizzas.prefetch_related('toppings', 'people').all())
     guest_person_ids = set(order.guest_persons.values_list('pk', flat=True))
+    if request.user.is_staff:
+        scores = _compute_pizza_scores(pizza_list)
+        pizzas_with_scores = [(p, scores[p.pk]) for p in pizza_list]
+    else:
+        pizzas_with_scores = [(p, None) for p in pizza_list]
     return render(request, 'webapp/order_results.html', {
         'order': order,
-        'pizzas': pizzas,
+        'pizzas_with_scores': pizzas_with_scores,
         'guest_person_ids': guest_person_ids,
     })
 

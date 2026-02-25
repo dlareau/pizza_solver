@@ -28,7 +28,8 @@ class CreateOrderForm(forms.Form):
     optimization_mode = forms.ChoiceField(
         choices=Order.OPTIMIZATION_MODE_CHOICES,
         label="Optimization strategy",
-        initial='maximize_likes',
+        initial='minimize_dislikes',
+        widget=forms.HiddenInput(),
     )
 
     def __init__(self, *args, host=None, selected_group=None, proto_order=None, **kwargs):

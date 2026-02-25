@@ -163,17 +163,7 @@
     {% endif %}
   </div>
 
-  <div class="field">
-    <label class="label" for="{{ form.optimization_mode.id_for_label }}">{{ form.optimization_mode.label }}</label>
-    <div class="control">
-      <div class="select">
-        {{ form.optimization_mode }}
-      </div>
-    </div>
-    {% if form.optimization_mode.errors %}
-    <p class="help is-danger">{% for e in form.optimization_mode.errors %}{{ e }}{% endfor %}</p>
-    {% endif %}
-  </div>
+  {{ form.optimization_mode }}
 
   <div class="field">
     <div class="control">
