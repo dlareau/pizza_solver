@@ -243,12 +243,17 @@ def create_order(request):
 
     # Build invite URL and guest PKs (used in both GET and POST-fall-through renders)
     invite_url = None
-    guest_person_ids_str = set()
+    guest_pks = set()
     if proto_order and proto_order.invite_token:
         invite_url = request.build_absolute_uri(
             reverse('order_join', args=[proto_order.invite_token])
         )
-        guest_person_ids_str = {str(pk) for pk in proto_order.guest_persons.values_list('pk', flat=True)}
+        guest_pks = set(proto_order.guest_persons.values_list('pk', flat=True))
+
+    if form.is_bound:
+        current_person_pks = set(int(pk) for pk in (form['people'].value() or []))
+    else:
+        current_person_pks = set(form.initial.get('people') or [])
 
     return render(request, 'webapp/order_create.html', {
         'form': form,
@@ -258,7 +263,9 @@ def create_order(request):
         'can_change_group': len(groups) > 1,
         'proto_order': proto_order,
         'invite_url': invite_url,
-        'guest_person_ids_str': guest_person_ids_str,
+        'people': form.fields['people'].queryset,
+        'guest_pks': guest_pks,
+        'current_person_pks': current_person_pks,
     })
 
 
@@ -296,6 +303,23 @@ def order_cancel_invite(request, order_id):
     group_pk = order.group.pk
     order.delete()  # cascades to guest Persons
     return redirect(reverse('create_order') + f'?group={group_pk}')
+
+
+@login_required
+def order_people_partial(request, order_id):
+    """Partial HTML for the people-selector tags; used by HTMX polling on the create page."""
+    order = get_object_or_404(Order, pk=order_id, invite_token__isnull=False)
+    person = get_object_or_404(Person, user_account=request.user)
+    if order.host != person:
+        return HttpResponseForbidden("Only the host can view this.")
+    guest_persons = order.guest_persons.all()
+    group_members_excl_host = order.group.members.exclude(pk=person.pk)
+    people = (group_members_excl_host | guest_persons).distinct()
+    return render(request, 'webapp/_people_tags_partial.html', {
+        'people': people,
+        'guest_pks': set(guest_persons.values_list('pk', flat=True)),
+        'current_person_pks': set(order.people.exclude(pk=person.pk).values_list('pk', flat=True)),
+    })
 
 
 def order_join(request, invite_token):
@@ -346,6 +370,8 @@ def order_join(request, invite_token):
                 'like_ids': like_ids,
             })
 
+    all_topping_pks = {t.pk for t in toppings}
+
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         if not name:
@@ -353,6 +379,7 @@ def order_join(request, invite_token):
                 'order': order,
                 'toppings': toppings,
                 'error': 'Please enter your name.',
+                'neutral_ids': all_topping_pks,
             })
         guest = Person.objects.create(name=name, email='', guest_for_order=order)
         order.people.add(guest)
@@ -372,6 +399,7 @@ def order_join(request, invite_token):
     return render(request, 'webapp/guests/join.html', {
         'order': order,
         'toppings': toppings,
+        'neutral_ids': all_topping_pks,
     })
 
 

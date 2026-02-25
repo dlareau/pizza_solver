@@ -3,6 +3,7 @@
 
 {% block extra_head %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -125,17 +126,14 @@
     <p id="people-count" class="help mb-2 has-text-weight-semibold"></p>
 
     <div id="people-tags"
+         {% if proto_order %}
+         hx-get="{% url 'order_people_partial' proto_order.pk %}"
+         hx-trigger="every 4s"
+         hx-swap="innerHTML"
+         {% endif %}
          style="display:flex; flex-wrap:wrap; gap:0.4rem;
-                max-height:160px; overflow-y:auto;
                 border:1px solid #dbdbdb; border-radius:4px; padding:0.5rem;">
-      {% for choice in form.people %}
-      <label style="cursor:pointer; margin:0;">
-        <span class="tag is-medium is-light person-tag">
-          {{ choice.choice_label }}{% if choice.data.value|stringformat:"s" in guest_person_ids_str %} <em class="has-text-grey" style="font-size:0.85em;">(guest)</em>{% endif %}
-        </span>
-        <span style="display:none;">{{ choice.tag }}</span>
-      </label>
-      {% endfor %}
+      {% include "webapp/_people_tags_partial.html" %}
     </div>
 
     {% if form.people.errors %}
@@ -212,25 +210,56 @@ input[type="number"] { -moz-appearance: textfield; }
     countEl.textContent = n + ' ' + (n === 1 ? 'person' : 'people') + ' selected';
   }
 
-  document.querySelectorAll('#people-tags label').forEach(function (lbl) {
-    var cb = lbl.querySelector('input[type="checkbox"]');
-    var tag = lbl.querySelector('.person-tag');
-    if (cb && cb.checked) {
-      tag.classList.replace('is-light', 'is-link');
-    }
-    lbl.addEventListener('click', function (e) {
-      e.preventDefault();
-      cb.checked = !cb.checked;
+  function initPeopleTags() {
+    document.querySelectorAll('#people-tags label').forEach(function (lbl) {
+      var cb = lbl.querySelector('input[type="checkbox"]');
+      var tag = lbl.querySelector('.person-tag');
+      if (!cb || !tag) return;
       if (cb.checked) {
         tag.classList.replace('is-light', 'is-link');
       } else {
         tag.classList.replace('is-link', 'is-light');
       }
-      updateCount();
+      lbl.addEventListener('click', function (e) {
+        e.preventDefault();
+        cb.checked = !cb.checked;
+        if (cb.checked) {
+          tag.classList.replace('is-light', 'is-link');
+        } else {
+          tag.classList.replace('is-link', 'is-light');
+        }
+        updateCount();
+      });
     });
+    updateCount();
+  }
+
+  initPeopleTags();
+
+  {% if proto_order %}
+  document.addEventListener('htmx:beforeSwap', function (e) {
+    if (e.detail.target.id === 'people-tags') {
+      var state = {};
+      e.detail.target.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+        state[cb.value] = cb.checked;
+      });
+      window._savedPeopleState = state;
+    }
   });
 
-  updateCount();
+  document.addEventListener('htmx:afterSwap', function (e) {
+    if (e.detail.target.id === 'people-tags') {
+      var saved = window._savedPeopleState || {};
+      e.detail.target.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+        if (cb.value in saved) {
+          cb.checked = saved[cb.value];
+        }
+        // new people not in saved → keep server default (checked, since they're in order.people)
+      });
+      initPeopleTags();
+    }
+  });
+  {% endif %}
 }());
 
 document.getElementById('pizzas-dec').addEventListener('click', function () {

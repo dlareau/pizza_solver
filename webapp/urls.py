@@ -6,6 +6,7 @@ urlpatterns = [
     path('orders/new/', views.create_order, name='create_order'),
     path('orders/<int:order_id>/results/', views.order_results, name='order_results'),
     path('orders/<int:order_id>/cancel-invite/', views.order_cancel_invite, name='order_cancel_invite'),
+    path('orders/<int:order_id>/people-partial/', views.order_people_partial, name='order_people_partial'),
     path('orders/join/<uuid:invite_token>/', views.order_join, name='order_join'),
 
     path('toppings/', views.topping_list, name='topping_list'),

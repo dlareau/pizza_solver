@@ -1,0 +1,10 @@
+{% for person in people %}
+<label style="cursor:pointer; margin:0;">
+  <span class="tag is-medium is-light person-tag">
+    {{ person.name }}{% if person.pk in guest_pks %} <em style="font-size:0.85em;">&nbsp;(guest)</em>{% endif %}
+  </span>
+  <span style="display:none;">
+    <input type="checkbox" name="people" value="{{ person.pk }}"{% if person.pk in current_person_pks %} checked{% endif %}>
+  </span>
+</label>
+{% endfor %}
