@@ -1,6 +1,10 @@
 {% extends "webapp/base.html" %}
 {% block title %}New Pizza Order{% endblock %}
 
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <h1 class="title">New Pizza Order</h1>
 <p class="subtitle">Ordering as: <strong>{{ host.name }}</strong></p>
@@ -54,6 +58,9 @@
         Copy
       </button>
     </div>
+  </div>
+  <div id="qr-section" class="mt-3" style="display:none;">
+    <div id="qr-canvas"></div>
   </div>
 </div>
 {% endif %}
@@ -287,6 +294,16 @@ document.getElementById('order-form').addEventListener('submit', function (e) {
   toggleInvite();
 }());
 {% endif %}
+
+(function () {
+  var qrDiv   = document.getElementById('qr-canvas');
+  var section = document.getElementById('qr-section');
+  var linkEl  = document.getElementById('invite-link');
+  var url     = linkEl && linkEl.value;
+  if (!qrDiv || !url) return;
+  section.style.display = 'block';
+  new QRCode(qrDiv, { text: url, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.L });
+}());
 </script>
 
 {% endif %}

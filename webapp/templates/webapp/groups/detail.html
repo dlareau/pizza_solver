@@ -1,6 +1,10 @@
 {% extends "webapp/base.html" %}
 {% block title %}{{ group.name }}{% endblock %}
 
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="is-flex is-align-items-center mb-4" style="gap:1rem;">
   <h1 class="title mb-0">{{ group.name }}</h1>
@@ -54,6 +58,9 @@
       </button>
     </div>
   </div>
+  <div id="qr-section" class="mt-3" style="display:none;">
+    <div id="qr-canvas"></div>
+  </div>
   {% if is_admin %}
   <form method="post" action="{% url 'group_reset_invite' group.pk %}" class="mt-2">
     {% csrf_token %}
@@ -66,4 +73,15 @@
 </div>
 
 <p class="mt-4"><a class="button is-light" href="{% url 'group_list' %}">&larr; Back to Groups</a></p>
+
+<script>
+(function () {
+  var qrDiv   = document.getElementById('qr-canvas');
+  var section = document.getElementById('qr-section');
+  var url     = document.getElementById('invite-link').value;
+  if (!qrDiv || !url) return;
+  section.style.display = 'block';
+  new QRCode(qrDiv, { text: url, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.L });
+}());
+</script>
 {% endblock %}
