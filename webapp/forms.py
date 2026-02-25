@@ -10,7 +10,7 @@ class CreateOrderForm(forms.Form):
         empty_label="-- Select a group --",
     )
     restaurant = forms.ModelChoiceField(
-        queryset=PizzaRestaurant.objects.all(),
+        queryset=PizzaRestaurant.objects.order_by('name'),
         label="Restaurant",
         empty_label="-- Select a restaurant --",
     )
@@ -56,7 +56,7 @@ class CreateOrderForm(forms.Form):
                 self.fields['people'].queryset = (
                     selected_group.members.exclude(pk=host.pk) if host else selected_group.members.all()
                 )
-                self.fields['restaurant'].queryset = PizzaRestaurant.objects.filter(group=selected_group)
+                self.fields['restaurant'].queryset = PizzaRestaurant.objects.filter(group=selected_group).order_by('name')
 
     def clean(self):
         cleaned = super().clean()
