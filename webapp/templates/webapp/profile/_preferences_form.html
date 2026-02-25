@@ -2,8 +2,9 @@
 <h2 class="subtitle mb-2">Topping Preferences</h2>
 
 {% for topping in toppings %}
-<div class="is-flex is-align-items-center mb-2" style="gap: 0.75rem;">
-  <span style="min-width: 10rem;">{{ topping.name }}</span>
+<div class="is-flex is-align-items-center mb-2" style="gap: 0.75rem; flex-wrap: wrap;">
+  <span style="width: 100%; font-weight: 500;" class="is-hidden-tablet">{{ topping.name }}</span>
+  <span style="min-width: 10rem;" class="is-hidden-mobile">{{ topping.name }}</span>
   <div class="buttons has-addons mb-0" data-topping="{{ topping.pk }}">
     <button type="button" data-value="allergy"
             class="button is-small pref-btn {% if topping.pk in allergy_ids %}is-danger{% else %}is-light{% endif %}">Allergy</button>
