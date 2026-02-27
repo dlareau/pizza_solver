@@ -25,7 +25,7 @@
     {% for restaurant in restaurants %}
     <tr>
       <td>{{ restaurant.name }}</td>
-      <td>{{ restaurant.group.name|default:"—" }}</td>
+      <td>{{ restaurant.group.name|default:"-" }}</td>
       <td>{{ restaurant.toppings.count }}</td>
       <td>
         <a class="button is-small is-warning" href="{% url 'restaurant_edit' restaurant.pk %}">Edit</a>

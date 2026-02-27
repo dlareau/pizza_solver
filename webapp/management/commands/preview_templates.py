@@ -64,7 +64,6 @@ PAGE_LABELS = [
     'topping_form_create',
     'topping_merge',
     'topping_confirm_delete',
-    'import',
     'sign_in',
     'sign_up',
 ]
@@ -93,7 +92,7 @@ class Command(BaseCommand):
             if selected_label is not None:
                 pages = [(l, u, a) for l, u, a in pages if l == selected_label]
             saved = self._fetch_pages(pages, ctx['user'])
-            transaction.set_rollback(True)  # rolls back on clean exit — no DB changes persist
+            transaction.set_rollback(True)  # rolls back on clean exit - no DB changes persist
         self._open_pages(saved)
         self.stdout.write(self.style.SUCCESS("Done."))
 
@@ -120,7 +119,7 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
 
     def _setup_data(self) -> dict:
-        # 1. Preview user — is_staff so topping/import pages are accessible
+        # 1. Preview user - is_staff so topping/import pages are accessible
         user, _ = User.objects.get_or_create(
             email=PREVIEW_EMAIL,
             defaults={'username': PREVIEW_EMAIL, 'is_staff': True},
@@ -135,7 +134,7 @@ class Command(BaseCommand):
             defaults={'name': 'Preview User', 'email': PREVIEW_EMAIL},
         )
 
-        # 3. Alice — second member makes group/order pages more realistic
+        # 3. Alice - second member makes group/order pages more realistic
         alice_user, _ = User.objects.get_or_create(
             email=ALICE_EMAIL,
             defaults={'username': ALICE_EMAIL, 'is_staff': False},
@@ -156,7 +155,7 @@ class Command(BaseCommand):
             admin_gm.save()
         GroupMembership.objects.get_or_create(group=group, person=alice)
 
-        # 4b. Second group — makes multi-group views renderable
+        # 4b. Second group - makes multi-group views renderable
         group2, _ = PizzaGroup.objects.get_or_create(name=GROUP2_NAME)
         GroupMembership.objects.get_or_create(group=group2, person=person)
 
@@ -279,7 +278,7 @@ class Command(BaseCommand):
         sgo = ctx['solved_guest_order']
 
         # Tuples are (label, url, authenticated).
-        # authenticated=False uses an anonymous client — needed for pages that
+        # authenticated=False uses an anonymous client - needed for pages that
         # redirect away when the user is already logged in.
         return [
             ('order_create_step2',    f'/orders/new/?group={g.pk}',          True),
@@ -302,7 +301,6 @@ class Command(BaseCommand):
             ('topping_form_create',   '/toppings/new/',                       True),
             ('topping_merge',         f'/toppings/{t.pk}/merge/',             True),
             ('topping_confirm_delete', f'/toppings/{t.pk}/delete/',           True),
-            ('import',                '/import/',                             True),
             ('sign_in',               '/accounts/login/',                     False),
             ('sign_up',               '/accounts/signup/',                    False),
         ]

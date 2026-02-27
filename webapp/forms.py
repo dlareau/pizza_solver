@@ -78,10 +78,6 @@ class CreateOrderForm(forms.Form):
         return cleaned
 
 
-class ImportForm(forms.Form):
-    file = forms.FileField(label="Import file (.txt)")
-
-
 class MergeToppingForm(forms.Form):
     target = forms.ModelChoiceField(
         queryset=Topping.objects.none(),

@@ -13,7 +13,7 @@
 
 {% elif guest %}
 
-{# Returning guest — edit preferences #}
+{# Returning guest - edit preferences #}
 <p class="mb-4">Welcome back, <strong>{{ guest.name }}</strong>! Update your preferences below.</p>
 
 <form method="post" style="max-width:680px;">
@@ -29,7 +29,7 @@
 
 {% else %}
 
-{# New guest — name + preferences #}
+{# New guest - name + preferences #}
 {% if error %}
 <div class="notification is-danger is-light mb-3">{{ error }}</div>
 {% endif %}

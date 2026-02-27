@@ -3,15 +3,17 @@ import re
 import uuid
 
 from allauth.account.views import SignupView as AllauthSignupView
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.db.models.functions import Lower
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import HttpResponseForbidden
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from .forms import (
-    CreateOrderForm, GuestPreferenceForm, ImportForm,
+    CreateOrderForm, GuestPreferenceForm,
     MergeToppingForm, PersonProfileForm, PizzaGroupForm, ToppingForm, RestaurantForm,
 )
 from .models import (
@@ -19,7 +21,7 @@ from .models import (
     Person, PersonToppingPreference, PizzaGroup, Topping, PizzaRestaurant, RestaurantTopping,
 )
 from .solver import solve
-
+from .utils import compute_pizza_scores
 
 # ---------------------------------------------------------------------------
 # Profile
@@ -40,19 +42,14 @@ class CustomSignupView(AllauthSignupView):
 @login_required
 def profile_edit(request):
     """Display and handle the profile/preference edit form."""
-    person, _ = Person.objects.get_or_create(
-        user_account=request.user,
-        defaults={'name': request.user.email, 'email': request.user.email},
-    )
-
+    person = Person.get_from_request(request)
     setup_mode = request.GET.get('setup') == '1'
 
-    # Process pending group join from signup flow (pop so it only runs once)
+    # Process pending group join from the signup flow (pop so it only runs once)
     pending_token = request.session.pop('pending_group_join', None)
     if pending_token:
         try:
-            import uuid as _uuid
-            group = PizzaGroup.objects.get(invite_token=_uuid.UUID(pending_token))
+            group = PizzaGroup.objects.get(invite_token=uuid.UUID(pending_token))
             _, created = GroupMembership.objects.get_or_create(group=group, person=person)
             if created:
                 messages.success(request, f"You've been added to '{group.name}'.")
@@ -60,6 +57,7 @@ def profile_edit(request):
             pass
 
     toppings = Topping.objects.order_by('name')
+
     pref_qs = PersonToppingPreference.objects.filter(person=person)
     allergy_ids = set(pref_qs.filter(preference=PersonToppingPreference.ALLERGY).values_list('topping_id', flat=True))
     dislike_ids = set(pref_qs.filter(preference=PersonToppingPreference.DISLIKE).values_list('topping_id', flat=True))
@@ -122,11 +120,7 @@ def create_order(request):
     GET:  Display the order creation form (optionally with a proto-order loaded via ?order=pk).
     POST: Handle invite_guests (create proto-order, redirect back) or generate order (run solver).
     """
-    person, _ = Person.objects.get_or_create(
-        user_account=request.user,
-        defaults={'name': request.user.email, 'email': request.user.email},
-    )
-
+    person = Person.get_from_request(request)
     if not person.pizza_groups.exists():
         messages.info(request, "You need to belong to a group before creating an order.")
         return redirect('group_list')
@@ -269,52 +263,18 @@ def create_order(request):
     })
 
 
-def _compute_pizza_scores(pizza_list):
-    """Return a dict mapping pizza.pk -> integer score based on preferences."""
-    all_people = {}
-    all_toppings = {}
-    pizza_data = {}
-    for pizza in pizza_list:
-        people = list(pizza.people.all())
-        toppings = list(pizza.toppings.all())
-        pizza_data[pizza.pk] = (people, toppings)
-        for p in people:
-            all_people[p.pk] = p
-        for t in toppings:
-            all_toppings[t.pk] = t
-
-    pref_map = {}
-    if all_people and all_toppings:
-        for person_id, topping_id, pref in PersonToppingPreference.objects.filter(
-            person_id__in=all_people.keys(),
-            topping_id__in=all_toppings.keys(),
-        ).values_list('person_id', 'topping_id', 'preference'):
-            pref_map[(person_id, topping_id)] = pref
-
-    scores = {}
-    for pizza_pk, (people, toppings) in pizza_data.items():
-        score = 0
-        for person in people:
-            default = PersonToppingPreference.DISLIKE if person.unrated_is_dislike else PersonToppingPreference.NEUTRAL
-            for topping in toppings:
-                pref = pref_map.get((person.pk, topping.pk), default)
-                if pref not in (PersonToppingPreference.NEUTRAL, PersonToppingPreference.ALLERGY):
-                    score += pref
-        scores[pizza_pk] = score
-    return scores
-
-
 def order_results(request, order_id):
     """Results page for a solved order. Unsolved orders redirect back to create_order."""
     order = get_object_or_404(Order, pk=order_id)
     if not order.pizzas.exists():
         if order.invite_token:
+            # TODO: these parameters feel weird
             return redirect(reverse('create_order') + f'?order={order.pk}&group={order.group.pk}')
         return redirect('create_order')
     pizza_list = list(order.pizzas.prefetch_related('toppings', 'people').all())
     guest_person_ids = set(order.guest_persons.values_list('pk', flat=True))
     if request.user.is_staff:
-        scores = _compute_pizza_scores(pizza_list)
+        scores = compute_pizza_scores(pizza_list)
         pizzas_with_scores = [(p, scores[p.pk]) for p in pizza_list]
     else:
         pizzas_with_scores = [(p, None) for p in pizza_list]
@@ -330,15 +290,15 @@ def order_results(request, order_id):
 # ---------------------------------------------------------------------------
 
 @login_required
+@require_POST
 def order_cancel_invite(request, order_id):
     """Host-only POST: delete the proto-order (and its guests), redirect to create_order."""
-    if request.method != 'POST':
-        return redirect('create_order')
     order = get_object_or_404(Order, pk=order_id, invite_token__isnull=False)
     person = get_object_or_404(Person, user_account=request.user)
     if order.host != person:
         return HttpResponseForbidden("Only the host can cancel this invite.")
     if order.pizzas.exists():
+        # TODO: maybe include message explaining the problem
         return redirect('order_results', order_id=order.pk)
     group_pk = order.group.pk
     order.delete()  # cascades to guest Persons
@@ -348,13 +308,16 @@ def order_cancel_invite(request, order_id):
 @login_required
 def order_people_partial(request, order_id):
     """Partial HTML for the people-selector tags; used by HTMX polling on the create page."""
+    # TODO: figure out if the invite token query portion is needed
     order = get_object_or_404(Order, pk=order_id, invite_token__isnull=False)
     person = get_object_or_404(Person, user_account=request.user)
     if order.host != person:
         return HttpResponseForbidden("Only the host can view this.")
     guest_persons = order.guest_persons.all()
     group_members_excl_host = order.group.members.exclude(pk=person.pk)
+    # TODO: figure out why this isn't redundant
     people = (group_members_excl_host | guest_persons).distinct()
+    # TODO: figure out what the heck is happening with these context variables
     return render(request, 'webapp/_people_tags_partial.html', {
         'people': people,
         'guest_pks': set(guest_persons.values_list('pk', flat=True)),
@@ -366,6 +329,7 @@ def order_join(request, invite_token):
     """No-auth guest join page. Session dedup prevents duplicate entries."""
     order = get_object_or_404(Order, invite_token=invite_token)
     toppings = list(order.restaurant.toppings.all().order_by('name'))
+    all_topping_pks = {t.pk for t in toppings}
     session_key = f'guest_person_{order.pk}'
 
     if order.pizzas.exists():
@@ -375,54 +339,24 @@ def order_join(request, invite_token):
         })
 
     existing_pk = request.session.get(session_key)
+    guest = None
     if existing_pk:
         guest = Person.objects.filter(pk=existing_pk, guest_for_order=order).first()
-        if guest:
-            if request.method == 'POST':
-                prefs = []
-                for topping in toppings:
-                    val = request.POST.get(f'pref_{topping.pk}', '0')
-                    try:
-                        pref_val = int(val)
-                    except ValueError:
-                        pref_val = 0
-                    prefs.append(PersonToppingPreference(person=guest, topping=topping, preference=pref_val))
-                PersonToppingPreference.objects.bulk_create(
-                    prefs,
-                    update_conflicts=True,
-                    unique_fields=['person', 'topping'],
-                    update_fields=['preference'],
-                )
-                messages.success(request, "Your preferences have been updated!")
-                return redirect('order_join', invite_token=invite_token)
-            pref_qs = guest.topping_preferences.filter(topping__in=toppings)
-            allergy_ids = set(pref_qs.filter(preference=PersonToppingPreference.ALLERGY).values_list('topping_id', flat=True))
-            dislike_ids = set(pref_qs.filter(preference=PersonToppingPreference.DISLIKE).values_list('topping_id', flat=True))
-            neutral_ids = set(pref_qs.filter(preference=PersonToppingPreference.NEUTRAL).values_list('topping_id', flat=True))
-            like_ids = set(pref_qs.filter(preference=PersonToppingPreference.LIKE).values_list('topping_id', flat=True))
-            return render(request, 'webapp/guests/join.html', {
-                'order': order,
-                'toppings': toppings,
-                'guest': guest,
-                'allergy_ids': allergy_ids,
-                'dislike_ids': dislike_ids,
-                'neutral_ids': neutral_ids,
-                'like_ids': like_ids,
-            })
-
-    all_topping_pks = {t.pk for t in toppings}
-
     if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        if not name:
-            return render(request, 'webapp/guests/join.html', {
-                'order': order,
-                'toppings': toppings,
-                'error': 'Please enter your name.',
-                'neutral_ids': all_topping_pks,
-            })
-        guest = Person.objects.create(name=name, email='', guest_for_order=order)
-        order.people.add(guest)
+        # create the guest if they don't exist
+        if not guest:
+            name = request.POST.get('name', '').strip()
+            if not name:
+                return render(request, 'webapp/guests/join.html', {
+                    'order': order,
+                    'toppings': toppings,
+                    'error': 'Please enter your name.',
+                    'neutral_ids': all_topping_pks,
+                })
+            guest = Person.objects.create(name=name, email='', guest_for_order=order)
+            order.people.add(guest)
+            request.session[session_key] = guest.pk
+
         prefs = []
         for topping in toppings:
             val = request.POST.get(f'pref_{topping.pk}', '0')
@@ -431,15 +365,39 @@ def order_join(request, invite_token):
             except ValueError:
                 pref_val = 0
             prefs.append(PersonToppingPreference(person=guest, topping=topping, preference=pref_val))
-        PersonToppingPreference.objects.bulk_create(prefs)
-        request.session[session_key] = guest.pk
-        messages.success(request, "Your preferences have been saved!")
+        PersonToppingPreference.objects.bulk_create(
+            prefs,
+            update_conflicts=True,
+            unique_fields=['person', 'topping'],
+            update_fields=['preference'],
+        )
+        messages.success(request, f"Your preferences have been saved!")
         return redirect('order_join', invite_token=invite_token)
+
+    allergy_ids = set()
+    dislike_ids = set()
+    neutral_ids = all_topping_pks
+    like_ids = set()
+    if guest:
+        # existing + get -> get split toppings for display + render
+        pref_qs = guest.topping_preferences.filter(topping__in=toppings)
+        allergy_ids = set(
+            pref_qs.filter(preference=PersonToppingPreference.ALLERGY).values_list('topping_id', flat=True))
+        dislike_ids = set(
+            pref_qs.filter(preference=PersonToppingPreference.DISLIKE).values_list('topping_id', flat=True))
+        neutral_ids = set(
+            pref_qs.filter(preference=PersonToppingPreference.NEUTRAL).values_list('topping_id', flat=True))
+        like_ids = set(
+            pref_qs.filter(preference=PersonToppingPreference.LIKE).values_list('topping_id', flat=True))
 
     return render(request, 'webapp/guests/join.html', {
         'order': order,
         'toppings': toppings,
-        'neutral_ids': all_topping_pks,
+        'guest': guest,
+        'allergy_ids': allergy_ids,
+        'dislike_ids': dislike_ids,
+        'neutral_ids': neutral_ids,
+        'like_ids': like_ids,
     })
 
 
@@ -449,20 +407,14 @@ def order_join(request, invite_token):
 
 @login_required
 def group_list(request):
-    person, _ = Person.objects.get_or_create(
-        user_account=request.user,
-        defaults={'name': request.user.email, 'email': request.user.email},
-    )
+    person = Person.get_from_request(request)
     memberships = GroupMembership.objects.filter(person=person).select_related('group')
     return render(request, 'webapp/groups/list.html', {'memberships': memberships})
 
 
 @login_required
 def group_create(request):
-    person, _ = Person.objects.get_or_create(
-        user_account=request.user,
-        defaults={'name': request.user.email, 'email': request.user.email},
-    )
+    person = Person.get_from_request(request)
     if request.method == 'POST':
         form = PizzaGroupForm(request.POST)
         if form.is_valid():
@@ -478,7 +430,7 @@ def group_create(request):
 @login_required
 def group_detail(request, pk):
     group = get_object_or_404(PizzaGroup, pk=pk)
-    person = get_object_or_404(Person, user_account=request.user)
+    person = Person.get_from_request(request)
     membership = get_object_or_404(GroupMembership, group=group, person=person)
     memberships = GroupMembership.objects.filter(group=group).select_related('person')
     invite_url = request.build_absolute_uri(f'/groups/join/{group.invite_token}/')
@@ -493,10 +445,7 @@ def group_detail(request, pk):
 @login_required
 def group_join(request, token):
     group = get_object_or_404(PizzaGroup, invite_token=token)
-    person, _ = Person.objects.get_or_create(
-        user_account=request.user,
-        defaults={'name': request.user.email, 'email': request.user.email},
-    )
+    person = Person.get_from_request(request)
     _, created = GroupMembership.objects.get_or_create(group=group, person=person)
     if created:
         messages.success(request, f"You have joined '{group.name}'.")
@@ -506,25 +455,22 @@ def group_join(request, token):
 
 
 @login_required
+@require_POST
 def group_reset_invite(request, pk):
-    if request.method != 'POST':
-        return redirect('group_detail', pk=pk)
     group = get_object_or_404(PizzaGroup, pk=pk)
     person = get_object_or_404(Person, user_account=request.user)
     membership = get_object_or_404(GroupMembership, group=group, person=person)
     if not membership.is_admin:
         return HttpResponseForbidden("Only admins can reset the invite link.")
-    import uuid as _uuid
-    group.invite_token = _uuid.uuid4()
+    group.invite_token = uuid.uuid4()
     group.save()
     messages.success(request, "Invite link has been reset. The old link will no longer work.")
     return redirect('group_detail', pk=pk)
 
 
 @login_required
+@require_POST
 def group_remove_member(request, pk, person_pk):
-    if request.method != 'POST':
-        return redirect('group_detail', pk=pk)
     group = get_object_or_404(PizzaGroup, pk=pk)
     requester = get_object_or_404(Person, user_account=request.user)
     requester_membership = get_object_or_404(GroupMembership, group=group, person=requester)
@@ -562,9 +508,8 @@ def topping_list(request):
 
 
 @login_required
+@staff_member_required
 def topping_create(request):
-    if not request.user.is_staff:
-        return HttpResponseForbidden()
     if request.method == 'POST':
         form = ToppingForm(request.POST)
         if form.is_valid():
@@ -577,9 +522,8 @@ def topping_create(request):
 
 
 @login_required
+@staff_member_required
 def topping_edit(request, pk):
-    if not request.user.is_staff:
-        return HttpResponseForbidden()
     topping = get_object_or_404(Topping, pk=pk)
     if request.method == 'POST':
         form = ToppingForm(request.POST, instance=topping)
@@ -593,9 +537,8 @@ def topping_edit(request, pk):
 
 
 @login_required
+@staff_member_required
 def topping_merge(request, pk):
-    if not request.user.is_staff:
-        return HttpResponseForbidden()
     topping = get_object_or_404(Topping, pk=pk)
 
     if request.method == 'POST':
@@ -638,9 +581,8 @@ def topping_merge(request, pk):
 
 
 @login_required
+@staff_member_required
 def topping_delete(request, pk):
-    if not request.user.is_staff:
-        return HttpResponseForbidden()
     topping = get_object_or_404(Topping, pk=pk)
     if request.method == 'POST':
         name = str(topping)
@@ -739,7 +681,7 @@ def restaurant_edit(request, pk):
         'action': 'Edit',
         'restaurant': restaurant,
         'selected_group': restaurant.group,
-        'can_change_group': False,
+        'can_chxange_group': False,
     })
 
 
@@ -756,83 +698,3 @@ def restaurant_delete(request, pk):
         return redirect('restaurant_list')
     return render(request, 'webapp/restaurants/confirm_delete.html', {'restaurant': restaurant})
 
-
-# ---------------------------------------------------------------------------
-# Import
-# ---------------------------------------------------------------------------
-
-@login_required
-def import_data(request):
-    if not request.user.is_staff:
-        return HttpResponseForbidden()
-
-    context = {'form': ImportForm()}
-
-    if request.method == 'POST':
-        form = ImportForm(request.POST, request.FILES)
-        context['form'] = form
-        if form.is_valid():
-            content = request.FILES['file'].read().decode('utf-8')
-            lines = [line.strip() for line in content.splitlines()]
-
-            section = None
-            toppings_created = 0
-            toppings_existed = 0
-            restaurants_created = 0
-            restaurants_existed = 0
-            warnings = []
-
-            for line in lines:
-                if not line or line.startswith('#'):
-                    continue
-                if line == '[toppings]':
-                    section = 'toppings'
-                    continue
-                if line == '[restaurants]':
-                    section = 'restaurants'
-                    continue
-
-                if section == 'toppings':
-                    _, created = Topping.objects.get_or_create(name=line)
-                    if created:
-                        toppings_created += 1
-                    else:
-                        toppings_existed += 1
-
-                elif section == 'restaurants':
-                    if ':' in line:
-                        restaurant_name, topping_str = line.split(':', 1)
-                        restaurant_name = restaurant_name.strip()
-                        topping_names = [t.strip() for t in topping_str.split(',') if t.strip()]
-                    else:
-                        restaurant_name = line
-                        topping_names = []
-
-                    if not restaurant_name:
-                        warnings.append(f"Could not parse restaurant line: {line!r}")
-                        continue
-
-                    restaurant, created = PizzaRestaurant.objects.get_or_create(name=restaurant_name)
-                    if created:
-                        restaurants_created += 1
-                    else:
-                        restaurants_existed += 1
-
-                    for topping_name in topping_names:
-                        topping, t_created = Topping.objects.get_or_create(name=topping_name)
-                        if t_created:
-                            toppings_created += 1
-                        RestaurantTopping.objects.get_or_create(restaurant=restaurant, topping=topping)
-
-                else:
-                    warnings.append(f"Line outside any section: {line!r}")
-
-            context['results'] = {
-                'toppings_created': toppings_created,
-                'toppings_existed': toppings_existed,
-                'restaurants_created': restaurants_created,
-                'restaurants_existed': restaurants_existed,
-            }
-            context['warnings'] = warnings
-
-    return render(request, 'webapp/import.html', context)

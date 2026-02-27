@@ -4,6 +4,7 @@
 {% block extra_head %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -67,7 +68,7 @@
 {% endif %}
 
 {% if proto_order %}
-{# Restaurant locked section — separate form to avoid nesting #}
+{# Restaurant locked section - separate form to avoid nesting #}
 <div class="field" style="max-width:560px;">
   <label class="label">Restaurant</label>
   <div class="is-flex is-align-items-center" style="gap: 0.75rem;">
@@ -87,27 +88,29 @@
   {{ form.group }} {# hidden input #}
   {% if proto_order %}
   <input type="hidden" name="proto_order_id" value="{{ proto_order.pk }}">
-  {{ form.restaurant }} {# hidden input — locked restaurant #}
+  {{ form.restaurant }} {# hidden input - locked restaurant #}
   {% else %}
 
-  <div class="field">
-    <label class="label" for="{{ form.restaurant.id_for_label }}">{{ form.restaurant.label }}</label>
-    <div class="control">
-      <div class="select is-fullwidth">
-        {{ form.restaurant }}
+  <div x-data="{ restaurant: '' }" @change="restaurant = $event.target.value">
+    <div class="field">
+      <label class="label" for="{{ form.restaurant.id_for_label }}">{{ form.restaurant.label }}</label>
+      <div class="control">
+        <div class="select is-fullwidth">
+          {{ form.restaurant }}
+        </div>
       </div>
+      {% if form.restaurant.errors %}
+      <p class="help is-danger">{% for e in form.restaurant.errors %}{{ e }}{% endfor %}</p>
+      {% endif %}
     </div>
-    {% if form.restaurant.errors %}
-    <p class="help is-danger">{% for e in form.restaurant.errors %}{{ e }}{% endfor %}</p>
-    {% endif %}
-  </div>
 
-  <div class="field mt-2">
-    <button class="button is-info is-outlined" type="submit" name="invite_guests" value="1"
-            id="invite-guests-btn" disabled>
-      Invite One-Time Guests
-    </button>
-    <p class="help">Generates a shareable link for one-time guests to set their preferences (restaurant cannot be changed after this).</p>
+    <div class="field mt-2">
+      <button class="button is-info is-outlined" type="submit" name="invite_guests" value="1"
+              id="invite-guests-btn" :disabled="!restaurant">
+        Invite One-Time Guests
+      </button>
+      <p class="help">Generates a shareable link for one-time guests to set their preferences (restaurant cannot be changed after this).</p>
+    </div>
   </div>
 
   {% endif %}
@@ -143,19 +146,19 @@
 
   <div class="field">
     <label class="label" for="{{ form.num_pizzas.id_for_label }}">{{ form.num_pizzas.label }}</label>
-    <div class="field has-addons" style="max-width:200px;">
+    <div class="field has-addons" style="max-width:200px;" x-data="{ count: {{ form.num_pizzas.value|default:1 }} }">
       <div class="control">
-        <button type="button" class="button" id="pizzas-dec">−</button>
+        <button type="button" class="button" @click="count = Math.max(1, count - 1)">−</button>
       </div>
       <div class="control is-expanded">
         <input class="input" style="text-align:center;" type="number"
                name="{{ form.num_pizzas.html_name }}"
                id="{{ form.num_pizzas.id_for_label }}"
-               value="{{ form.num_pizzas.value|default:1 }}"
+               x-model="count"
                min="1">
       </div>
       <div class="control">
-        <button type="button" class="button" id="pizzas-inc">+</button>
+        <button type="button" class="button" @click="count++">+</button>
       </div>
     </div>
     {% if form.num_pizzas.errors %}
@@ -252,16 +255,6 @@ input[type="number"] { -moz-appearance: textfield; }
   {% endif %}
 }());
 
-document.getElementById('pizzas-dec').addEventListener('click', function () {
-  var input = document.getElementById('{{ form.num_pizzas.id_for_label }}');
-  var val = parseInt(input.value, 10) || 1;
-  if (val > 1) input.value = val - 1;
-});
-document.getElementById('pizzas-inc').addEventListener('click', function () {
-  var input = document.getElementById('{{ form.num_pizzas.id_for_label }}');
-  var val = parseInt(input.value, 10) || 1;
-  input.value = val + 1;
-});
 
 document.getElementById('order-form').addEventListener('submit', function (e) {
   {% if not proto_order %}
@@ -302,17 +295,6 @@ document.getElementById('order-form').addEventListener('submit', function (e) {
   {% endif %}
 });
 
-{% if not proto_order %}
-(function () {
-  var restaurantSelect = document.getElementById('{{ form.restaurant.id_for_label }}');
-  var inviteBtn = document.getElementById('invite-guests-btn');
-  function toggleInvite() {
-    inviteBtn.disabled = !restaurantSelect.value;
-  }
-  restaurantSelect.addEventListener('change', toggleInvite);
-  toggleInvite();
-}());
-{% endif %}
 
 (function () {
   var qrDiv   = document.getElementById('qr-canvas');

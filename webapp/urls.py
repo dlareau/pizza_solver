@@ -20,8 +20,6 @@ urlpatterns = [
     path('restaurants/<int:pk>/edit/', views.restaurant_edit, name='restaurant_edit'),
     path('restaurants/<int:pk>/delete/', views.restaurant_delete, name='restaurant_delete'),
 
-    path('import/', views.import_data, name='import_data'),
-
     path('profile/edit/', views.profile_edit, name='profile_edit'),
 
     path('groups/', views.group_list, name='group_list'),

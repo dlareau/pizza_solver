@@ -20,7 +20,21 @@ class User(AbstractUser):
 
 
 class Person(models.Model):
-    """Represents a participant — either a persistent user (user_account set) or a guest (user_account null)."""
+    """Represents a participant: Either a persistent user (user_account set) or a guest (user_account null)."""
+    class Meta:
+        verbose_name_plural = "People"
+
+    @classmethod
+    def get_from_request(cls, request):
+        """Get the Person associated with the current request, if any."""
+        if request.user.is_authenticated:
+            person, _ = cls.objects.get_or_create(
+                user_account=request.user,
+                defaults={'name': request.user.email, 'email': request.user.email},
+            )
+            return person
+        return None
+
     name = models.CharField(max_length=200)
     email = models.EmailField(blank=True)
     comments = models.TextField(blank=True, null=True)
@@ -50,9 +64,6 @@ class Person(models.Model):
 
     def __str__(self):
         return self.name
-
-    class Meta:
-        verbose_name_plural = "People"
 
 
 class PizzaGroup(models.Model):

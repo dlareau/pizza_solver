@@ -2,21 +2,21 @@
 Pizza optimization solver.
 
 The solver assigns people to pizzas and selects toppings to maximize
-satisfaction while respecting hard constraints (allergies).
+satisfaction while respecting hard constraints such as allergies.
 
 Constraints:
   - ALLERGY (preference=-2): A participant must NEVER be assigned to a pizza
-    containing a topping they are allergic to. This is a hard constraint.
+    containing a topping they are allergic to.
 
-Soft objectives (by optimization_mode):
+Objectives:
   - 'maximize_likes': Maximize the total LIKE (+1) scores for toppings on each
     participant's pizza.
   - 'minimize_dislikes': Minimize the total DISLIKE (-1) violations.
 
 Input:
   - An Order object (saved to DB) with .restaurant, .people, .num_pizzas,
-    and .optimization_mode set.
-  - The order's people M2M must already be populated (includes guests as Persons).
+    and .optimization_mode set and people M2M already populated
+    (including guests as Persons).
 
 Output:
   - A list of saved OrderedPizza objects, each with toppings and people
@@ -95,7 +95,7 @@ def solve(order: Order) -> list[OrderedPizza]:
     # tv[t,k]: topping t on pizza k
     tv = {(t, k): pulp.LpVariable(f"t_{t}_{k}", cat='Binary')
           for t in range(T) for k in range(K)}
-    # z[p,t,k]: linearization of x[p,k] * tv[t,k] — only for LIKE/DISLIKE pairs
+    # z[p,t,k]: linearization of x[p,k] * tv[t,k] - only for LIKE/DISLIKE pairs
     nonzero_pairs = [(p, t) for p in range(P) for t in range(T)
                      if prefs[(p, t)] not in (PersonToppingPreference.NEUTRAL,
                                               PersonToppingPreference.ALLERGY)]
