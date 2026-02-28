@@ -50,7 +50,17 @@ INSTALLED_APPS = [
     'allauth.socialaccount',  # Optional: for social authentication
     
     'webapp',
+
+    # constance for runtime-configurable settings
+    'constance',
+    'constance.backends.database',
 ]
+
+CONSTANCE_BACKEND = 'constance.backends.database.DatabaseBackend'
+
+CONSTANCE_CONFIG = {
+    'MAX_TOPPINGS_PER_PIZZA': (3, 'Maximum number of toppings allowed per pizza'),
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

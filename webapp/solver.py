@@ -26,6 +26,7 @@ Output:
 import math
 
 import pulp
+from constance import config
 
 from .models import Order, OrderedPizza, PersonToppingPreference
 
@@ -115,9 +116,9 @@ def solve(order: Order) -> list[OrderedPizza]:
                 for k in range(K):
                     prob += x[p, k] + tv[t, k] <= 1, f"allergy_{p}_{t}_{k}"
 
-    # 3. Topping cap: at most 3 toppings per pizza
+    # 3. Topping cap: at most MAX_TOPPINGS_PER_PIZZA toppings per pizza
     for k in range(K):
-        prob += pulp.lpSum(tv[t, k] for t in range(T)) <= 3, f"topping_cap_{k}"
+        prob += pulp.lpSum(tv[t, k] for t in range(T)) <= config.MAX_TOPPINGS_PER_PIZZA, f"topping_cap_{k}"
 
     # 4. Balanced assignment: each pizza gets floor(P/K) or ceil(P/K) participants
     lo, hi = P // K, math.ceil(P / K)

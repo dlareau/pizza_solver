@@ -5,7 +5,7 @@ Usage:
     python manage.py seed_test_data
 
 Wipes all non-superuser accounts and non-topping data, then creates 27 test users
-(Person01–Person27) with password 'testpass', along with a group, a restaurant, and
+(Person01 - Person27) with password 'testpass', along with a group, a restaurant, and
 topping preferences sourced from a real group preference survey.
 
 Toppings are created via get_or_create so this command works whether or not

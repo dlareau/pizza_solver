@@ -4,6 +4,6 @@
 <p class="mb-4">
   <strong>Group:</strong> {{ selected_group.name }}
   {% if can_change_group %}
-  <a class="ml-3 is-size-7" href="{% url 'order_select_group' %}">Change group</a>
+  <a class="ml-3 is-size-7" href="{% url 'order_select_group' %}" onclick="return confirm('Changing group will remove all guests and their preferences. Are you sure?');">Change group</a>
   {% endif %}
 </p>

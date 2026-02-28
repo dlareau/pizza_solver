@@ -309,7 +309,6 @@ def order_cancel_invite(request, order_id):
     if order.host != person:
         return HttpResponseForbidden("Only the host can cancel this invite.")
     if order.pizzas.exists():
-        # TODO: maybe include message explaining the problem
         return redirect('order_results', order_id=order.pk)
     group_pk = order.group.pk
     order.delete()  # cascades to guest Persons
@@ -319,7 +318,6 @@ def order_cancel_invite(request, order_id):
 @login_required
 def order_people_partial(request, order_id):
     """Partial HTML for the people-selector tags; used by HTMX polling on the create page."""
-    # TODO: figure out if the invite token query portion is needed
     order = get_object_or_404(Order, pk=order_id, invite_token__isnull=False)
     person = get_object_or_404(Person, user_account=request.user)
     if order.host != person:
@@ -328,7 +326,6 @@ def order_people_partial(request, order_id):
     group_members_excl_host = order.group.members.exclude(pk=person.pk)
     # TODO: figure out why this isn't redundant
     people = (group_members_excl_host | guest_persons).distinct()
-    # TODO: figure out what the heck is happening with these context variables
     return render(request, 'webapp/_people_tags_partial.html', {
         'people': people,
         'guest_pks': set(guest_persons.values_list('pk', flat=True)),
