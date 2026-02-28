@@ -1,0 +1,9 @@
+<h1 class="title">New Pizza Order</h1>
+<p class="subtitle">Ordering as: <strong>{{ host.name }}</strong></p>
+
+<p class="mb-4">
+  <strong>Group:</strong> {{ selected_group.name }}
+  {% if can_change_group %}
+  <a class="ml-3 is-size-7" href="{% url 'order_select_group' %}">Change group</a>
+  {% endif %}
+</p>

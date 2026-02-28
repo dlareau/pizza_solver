@@ -1,0 +1,88 @@
+{% extends "webapp/base.html" %}
+{% load static %}
+{% block title %}New Pizza Order{% endblock %}
+
+{% block extra_head %}
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+{% endblock %}
+
+{% block content %}
+{% include "webapp/_order_page_header.html" %}
+
+<form method="post" style="max-width: 560px;" novalidate id="order-form">
+  {% csrf_token %}
+
+  <div x-data="{ restaurant: '' }" @change="restaurant = $event.target.value">
+    <div class="field">
+      <label class="label" for="{{ form.restaurant.id_for_label }}">{{ form.restaurant.label }}</label>
+      <div class="control">
+        <div class="select is-fullwidth">
+          {{ form.restaurant }}
+        </div>
+      </div>
+      {% if form.restaurant.errors %}
+      <p class="help is-danger">{% for e in form.restaurant.errors %}{{ e }}{% endfor %}</p>
+      {% endif %}
+    </div>
+
+    <div class="field mt-2">
+      <button class="button is-info is-outlined" type="submit" name="invite_guests" value="1"
+              id="invite-guests-btn" :disabled="!restaurant">
+        Invite One-Time Guests
+      </button>
+      <p class="help">Generates a shareable link for one-time guests to set their preferences (restaurant cannot be changed after this).</p>
+    </div>
+  </div>
+
+  {% if form.non_field_errors %}
+  <div class="notification is-danger is-light">
+    {% for error in form.non_field_errors %}
+    <p>{{ error }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="field">
+    <label class="label">{{ form.people.label }}</label>
+    <p class="help mb-2">Select additional group members to include (you are always included).</p>
+    <p id="people-count" class="help mb-2 has-text-weight-semibold"></p>
+
+    <div id="people-tags"
+         style="display:flex; flex-wrap:wrap; gap:0.4rem;
+                border:1px solid #dbdbdb; border-radius:4px; padding:0.5rem;">
+      {% include "webapp/_people_tags_partial.html" %}
+    </div>
+
+    {% if form.people.errors %}
+    <p class="help is-danger">{% for e in form.people.errors %}{{ e }}{% endfor %}</p>
+    {% endif %}
+  </div>
+
+  {% include "webapp/_num_pizzas_field.html" %}
+
+  {{ form.optimization_mode }}
+
+  <div class="field">
+    <div class="control">
+      <button class="button is-primary" type="submit">Generate Pizza Order</button>
+    </div>
+  </div>
+</form>
+
+{% include "webapp/_loading_overlay.html" %}
+
+<style>
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+#invite-guests-btn:disabled {
+  background-color: transparent !important;
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+</style>
+<script src="{% static 'webapp/js/order_loading_overlay.js' %}"></script>
+<script src="{% static 'webapp/js/order_people_tags.js' %}"></script>
+<script src="{% static 'webapp/js/order_new.js' %}"></script>
+
+{% endblock %}

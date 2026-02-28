@@ -3,17 +3,7 @@ from django.forms import CheckboxSelectMultiple, ModelMultipleChoiceField
 from .models import Order, Person, PizzaGroup, PizzaRestaurant, Topping
 
 
-class CreateOrderForm(forms.Form):
-    group = forms.ModelChoiceField(
-        queryset=PizzaGroup.objects.none(),
-        label="Group",
-        empty_label="-- Select a group --",
-    )
-    restaurant = forms.ModelChoiceField(
-        queryset=PizzaRestaurant.objects.order_by('name'),
-        label="Restaurant",
-        empty_label="-- Select a restaurant --",
-    )
+class BaseOrderForm(forms.Form):
     people = forms.ModelMultipleChoiceField(
         queryset=Person.objects.none(),
         label="Select people for this order",
@@ -32,40 +22,19 @@ class CreateOrderForm(forms.Form):
         widget=forms.HiddenInput(),
     )
 
-    def __init__(self, *args, host=None, selected_group=None, proto_order=None, **kwargs):
+    def __init__(self, *args, host=None, selected_group=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.host = host
+        self.selected_group = selected_group
         self._guest_pks = set()
-        if host is not None:
-            self.fields['group'].queryset = host.pizza_groups.all()
-
-        if selected_group is not None:
-            self.fields['group'].widget = forms.HiddenInput()
-            self.fields['group'].initial = selected_group.pk
-
-            if proto_order is not None:
-                self.fields['restaurant'].queryset = PizzaRestaurant.objects.filter(pk=proto_order.restaurant.pk)
-                self.fields['restaurant'].widget = forms.HiddenInput()
-                guest_persons = proto_order.guest_persons.all()
-                self._guest_pks = set(guest_persons.values_list('pk', flat=True))
-                group_members_excl_host = (
-                    selected_group.members.exclude(pk=host.pk) if host else selected_group.members.all()
-                )
-                self.fields['people'].queryset = (group_members_excl_host | guest_persons).distinct()
-            else:
-                self.fields['people'].queryset = (
-                    selected_group.members.exclude(pk=host.pk) if host else selected_group.members.all()
-                )
-                self.fields['restaurant'].queryset = PizzaRestaurant.objects.filter(group=selected_group).order_by('name')
 
     def clean(self):
         cleaned = super().clean()
-        group = cleaned.get('group')
         people = cleaned.get('people')
         num_pizzas = cleaned.get('num_pizzas')
 
-        if group and people is not None:
-            group_member_ids = set(group.members.values_list('pk', flat=True))
+        if self.selected_group and people is not None:
+            group_member_ids = set(self.selected_group.members.values_list('pk', flat=True))
             for person in people:
                 if person.pk not in group_member_ids and person.pk not in self._guest_pks:
                     self.add_error('people', f"{person.name} is not a member of the selected group.")
@@ -76,6 +45,36 @@ class CreateOrderForm(forms.Form):
                 self.add_error('num_pizzas', "Cannot have more pizzas than people.")
 
         return cleaned
+
+
+class NewOrderForm(BaseOrderForm):
+    restaurant = forms.ModelChoiceField(
+        queryset=PizzaRestaurant.objects.order_by('name'),
+        label="Restaurant",
+        empty_label="-- Select a restaurant --",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['people'].queryset = (
+            self.selected_group.members.exclude(pk=self.host.pk)
+            if self.host else self.selected_group.members.all()
+        )
+        self.fields['restaurant'].queryset = PizzaRestaurant.objects.filter(
+            group=self.selected_group
+        ).order_by('name')
+
+
+class DraftOrderForm(BaseOrderForm):
+    def __init__(self, *args, proto_order=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        guest_persons = proto_order.guest_persons.all()
+        self._guest_pks = set(guest_persons.values_list('pk', flat=True))
+        group_members_excl_host = (
+            self.selected_group.members.exclude(pk=self.host.pk)
+            if self.host else self.selected_group.members.all()
+        )
+        self.fields['people'].queryset = (group_members_excl_host | guest_persons).distinct()
 
 
 class MergeToppingForm(forms.Form):

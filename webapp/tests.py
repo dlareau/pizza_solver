@@ -92,7 +92,7 @@ class OrderModelTests(TestCase):
     def test_order_defaults(self):
         order = Order.objects.create(host=self.person, restaurant=self.restaurant, group=self.group)
         self.assertEqual(order.num_pizzas, 1)
-        self.assertEqual(order.optimization_mode, 'maximize_likes')
+        self.assertEqual(order.optimization_mode, 'minimize_dislikes')
 
     def test_order_str(self):
         order = Order.objects.create(host=self.person, restaurant=self.restaurant, group=self.group)
@@ -120,7 +120,7 @@ class SolverStubTests(TestCase):
 # View integration tests
 # ---------------------------------------------------------------------------
 
-class CreateOrderViewTests(TestCase):
+class NewOrderViewTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.topping = Topping.objects.create(name="Pepperoni")
@@ -138,19 +138,32 @@ class CreateOrderViewTests(TestCase):
         GroupMembership.objects.create(group=self.group, person=self.bob)
         self.client.force_login(self.user)
 
-    def test_get_create_order_returns_200(self):
-        response = self.client.get(reverse('create_order'))
+    def _new_order_url(self):
+        return reverse('new_order', args=[self.group.pk])
+
+    def test_select_group_single_group_redirects(self):
+        response = self.client.get(reverse('order_select_group'))
+        self.assertRedirects(response, self._new_order_url())
+
+    def test_select_group_multi_group_shows_picker(self):
+        group2 = make_group("Second Group")
+        GroupMembership.objects.create(group=group2, person=self.alice)
+        response = self.client.get(reverse('order_select_group'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Select a Group")
+
+    def test_get_new_order_returns_200(self):
+        response = self.client.get(self._new_order_url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "New Pizza Order")
 
     def test_post_invalid_form_shows_errors(self):
-        response = self.client.post(reverse('create_order'), data={})
+        response = self.client.post(self._new_order_url(), data={})
         self.assertEqual(response.status_code, 200)
         self.assertFormError(response.context['form'], 'restaurant', 'This field is required.')
 
     def test_post_valid_form_creates_order_and_redirects(self):
-        response = self.client.post(reverse('create_order'), data={
-            'group': self.group.pk,
+        response = self.client.post(self._new_order_url(), data={
             'restaurant': self.restaurant.pk,
             'people': [self.bob.pk],
             'num_pizzas': 1,
@@ -162,8 +175,7 @@ class CreateOrderViewTests(TestCase):
 
     def test_host_auto_added_to_people(self):
         # Alice is host (logged-in user) but not explicitly in people; she should be auto-included.
-        response = self.client.post(reverse('create_order'), data={
-            'group': self.group.pk,
+        response = self.client.post(self._new_order_url(), data={
             'restaurant': self.restaurant.pk,
             'people': [self.bob.pk],
             'num_pizzas': 1,
@@ -175,8 +187,7 @@ class CreateOrderViewTests(TestCase):
 
     def test_more_pizzas_than_people_shows_error(self):
         # alice (host) + bob = 2 people, so 5 pizzas should fail
-        response = self.client.post(reverse('create_order'), data={
-            'group': self.group.pk,
+        response = self.client.post(self._new_order_url(), data={
             'restaurant': self.restaurant.pk,
             'people': [self.bob.pk],
             'num_pizzas': 5,
@@ -184,6 +195,65 @@ class CreateOrderViewTests(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "more pizzas than people")
+
+    def test_invite_guests_creates_proto_order_and_redirects_to_draft(self):
+        response = self.client.post(self._new_order_url(), data={
+            'restaurant': self.restaurant.pk,
+            'invite_guests': '1',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/draft/', response['Location'])
+        proto = Order.objects.get()
+        self.assertIsNotNone(proto.invite_token)
+        self.assertFalse(proto.pizzas.exists())
+
+
+class DraftOrderViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.topping = Topping.objects.create(name="Pepperoni")
+        self.group = make_group("Alice's Group")
+        self.restaurant = make_restaurant(toppings=[self.topping], group=self.group)
+        from webapp.models import User
+        self.user = User.objects.create_user(
+            username='alice', email='alice@test.com', password='testpass',
+        )
+        self.alice = make_person("Alice")
+        self.alice.user_account = self.user
+        self.alice.save()
+        self.bob = make_person("Bob")
+        GroupMembership.objects.create(group=self.group, person=self.alice, is_admin=True)
+        GroupMembership.objects.create(group=self.group, person=self.bob)
+        self.client.force_login(self.user)
+        import uuid
+        self.proto_order = Order.objects.create(
+            host=self.alice, group=self.group, restaurant=self.restaurant,
+            num_pizzas=1, optimization_mode='maximize_likes', invite_token=uuid.uuid4(),
+        )
+        self.proto_order.people.add(self.alice)
+
+    def _draft_url(self):
+        return reverse('draft_order', args=[self.group.pk, self.proto_order.pk])
+
+    def test_get_draft_order_returns_200(self):
+        response = self.client.get(self._draft_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "New Pizza Order")
+
+    def test_post_draft_order_generates_and_redirects(self):
+        response = self.client.post(self._draft_url(), data={
+            'people': [self.bob.pk],
+            'num_pizzas': 1,
+            'optimization_mode': 'maximize_likes',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/results/', response['Location'])
+
+    def test_draft_order_solved_redirects_to_results(self):
+        pizza = OrderedPizza.objects.create(order=self.proto_order)
+        pizza.people.set([self.alice])
+        response = self.client.get(self._draft_url())
+        self.assertRedirects(response, reverse('order_results', args=[self.proto_order.pk]))
 
 
 class OrderResultsViewTests(TestCase):
@@ -205,7 +275,7 @@ class OrderResultsViewTests(TestCase):
         self.assertContains(response, "Pizza assignments")
 
     def test_results_page_shows_no_assignments_when_empty(self):
-        # An order without pizzas redirects to create_order instead of showing results
+        # An order without pizzas redirects to the order form instead of showing results
         empty_order = make_order(self.restaurant, self.alice, [self.alice], group=self.group)
         url = reverse('order_results', kwargs={'order_id': empty_order.pk})
         response = self.client.get(url)

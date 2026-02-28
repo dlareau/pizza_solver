@@ -1,0 +1,28 @@
+{% extends "webapp/base.html" %}
+{% block title %}New Pizza Order{% endblock %}
+
+{% block content %}
+<h1 class="title">New Pizza Order</h1>
+
+<form method="post" action="" style="max-width: 400px;">
+  {% csrf_token %}
+  <div class="field">
+    <label class="label">Select a Group</label>
+    <div class="control">
+      <div class="select is-fullwidth">
+        <select name="group">
+          <option value="">-- Select a group --</option>
+          {% for group in groups %}
+          <option value="{{ group.pk }}">{{ group.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="field">
+    <div class="control">
+      <button class="button is-primary" type="submit">Continue</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

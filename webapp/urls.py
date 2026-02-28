@@ -2,8 +2,10 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.create_order, name='index'),
-    path('orders/new/', views.create_order, name='create_order'),
+    path('', views.order_select_group, name='index'),
+    path('orders/new/', views.order_select_group, name='order_select_group'),
+    path('orders/group/<int:group_id>/new/', views.new_order, name='new_order'),
+    path('orders/group/<int:group_id>/draft/<int:order_id>/', views.draft_order, name='draft_order'),
     path('orders/<int:order_id>/results/', views.order_results, name='order_results'),
     path('orders/<int:order_id>/cancel-invite/', views.order_cancel_invite, name='order_cancel_invite'),
     path('orders/<int:order_id>/people-partial/', views.order_people_partial, name='order_people_partial'),

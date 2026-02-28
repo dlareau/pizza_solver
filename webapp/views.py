@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .forms import (
-    CreateOrderForm, GuestPreferenceForm,
+    NewOrderForm, DraftOrderForm, GuestPreferenceForm,
     MergeToppingForm, PersonProfileForm, PizzaGroupForm, ToppingForm, RestaurantForm,
 )
 from .models import (
@@ -114,54 +114,63 @@ def profile_edit(request):
 # Orders
 # ---------------------------------------------------------------------------
 
+def _run_solver(request, order):
+    """Run the solver on an order. Returns a redirect response, or None to re-render."""
+    try:
+        solve(order)
+    except NotImplementedError:
+        messages.warning(
+            request,
+            "The optimization algorithm is not yet implemented. "
+            "The order was created but no pizza assignments were generated."
+        )
+        return redirect('order_results', order_id=order.id)
+    except ValueError as e:
+        messages.error(request, f"Solver error: {e}")
+        return None
+    messages.success(request, "Pizza order generated successfully!")
+    return redirect('order_results', order_id=order.id)
+
 @login_required
-def create_order(request):
-    """
-    GET:  Display the order creation form (optionally with a proto-order loaded via ?order=pk).
-    POST: Handle invite_guests (create proto-order, redirect back) or generate order (run solver).
-    """
+def order_select_group(request):
+    """Redirect single-group users straight to the order form; multi-group users pick a group."""
     person = Person.get_from_request(request)
-    if not person.pizza_groups.exists():
+    groups = list(person.pizza_groups.all())
+    if not groups:
         messages.info(request, "You need to belong to a group before creating an order.")
         return redirect('group_list')
-
-    def _get_selected_group(data):
+    if len(groups) == 1:
+        return redirect('new_order', group_id=groups[0].pk)
+    if request.method == 'POST':
         try:
-            group_pk = data.get('group')
-            if group_pk:
-                return person.pizza_groups.get(pk=group_pk)
+            group = person.pizza_groups.get(pk=request.POST.get('group'))
+            return redirect('new_order', group_id=group.pk)
         except PizzaGroup.DoesNotExist:
             pass
-        return None
+    return render(request, 'webapp/order_select_group.html', {'groups': groups})
 
-    # Load proto-order from query string or POST body
-    proto_order = None
-    proto_order_id = request.GET.get('order') or request.POST.get('proto_order_id')
-    if proto_order_id:
-        try:
-            proto_order = Order.objects.get(
-                pk=int(proto_order_id), host=person, invite_token__isnull=False
-            )
-            if proto_order.pizzas.exists():
-                proto_order = None  # already solved, treat as no proto-order
-        except (Order.DoesNotExist, ValueError, TypeError):
-            pass
+
+@login_required
+def new_order(request, group_id):
+    """
+    GET:  Display the blank new-order form.
+    POST: Handle invite_guests (create proto-order, redirect to draft) or generate order (run solver).
+    """
+    person = Person.get_from_request(request)
+    selected_group = get_object_or_404(PizzaGroup, pk=group_id)
+    get_object_or_404(GroupMembership, group=selected_group, person=person)
+    can_change_group = person.pizza_groups.count() > 1
 
     if request.method == 'POST':
-        groups = list(person.pizza_groups.all())
-        selected_group = _get_selected_group(request.POST)
-        if selected_group is None and proto_order:
-            selected_group = proto_order.group
-
         if 'invite_guests' in request.POST:
             restaurant_id = request.POST.get('restaurant')
-            if not restaurant_id or not selected_group:
+            if not restaurant_id:
                 messages.error(request, "Please select a restaurant before inviting guests.")
-                form = CreateOrderForm(request.POST, host=person, selected_group=selected_group)
-                return render(request, 'webapp/order_create.html', {
+                form = NewOrderForm(request.POST, host=person, selected_group=selected_group)
+                return render(request, 'webapp/order_new.html', {
                     'form': form, 'host': person, 'selected_group': selected_group,
-                    'groups': groups, 'can_change_group': len(groups) > 1,
-                    'proto_order': None, 'invite_url': None, 'guest_person_ids_str': set(),
+                    'can_change_group': can_change_group,
+                    'people': form.fields['people'].queryset, 'current_person_pks': set(),
                 })
             restaurant = get_object_or_404(PizzaRestaurant, pk=restaurant_id, group=selected_group)
             order = Order.objects.create(
@@ -173,88 +182,90 @@ def create_order(request):
                 invite_token=uuid.uuid4(),
             )
             order.people.add(person)
-            return redirect(reverse('create_order') + f'?order={order.pk}&group={selected_group.pk}')
+            return redirect('draft_order', group_id=selected_group.pk, order_id=order.pk)
 
-        form = CreateOrderForm(request.POST, host=person, selected_group=selected_group, proto_order=proto_order)
+        form = NewOrderForm(request.POST, host=person, selected_group=selected_group)
         if form.is_valid():
             data = form.cleaned_data
-
-            if proto_order:
-                proto_order.num_pizzas = data['num_pizzas']
-                proto_order.optimization_mode = data['optimization_mode']
-                proto_order.save()
-                proto_order.people.set(set(data['people']) | {person})
-                target_order = proto_order
-            else:
-                target_order = Order.objects.create(
-                    host=person,
-                    restaurant=data['restaurant'],
-                    num_pizzas=data['num_pizzas'],
-                    optimization_mode=data['optimization_mode'],
-                    group=data['group'],
-                )
-                target_order.people.set(set(data['people']) | {person})
-
-            try:
-                solve(target_order)
-            except NotImplementedError:
-                messages.warning(
-                    request,
-                    "The optimization algorithm is not yet implemented. "
-                    "The order was created but no pizza assignments were generated."
-                )
-                return redirect('order_results', order_id=target_order.id)
-            except ValueError as e:
-                messages.error(request, f"Solver error: {e}")
-                if not proto_order:
-                    target_order.delete()
-                # Fall through to render with form errors
-            else:
-                messages.success(request, "Pizza order generated successfully!")
-                return redirect('order_results', order_id=target_order.id)
-    else:
-        groups = list(person.pizza_groups.all())
-        selected_group = _get_selected_group(request.GET)
-        if selected_group is None and proto_order:
-            selected_group = proto_order.group
-        if selected_group is None and len(groups) == 1:
-            selected_group = groups[0]
-
-        if proto_order and selected_group:
-            participants_excl_host = proto_order.people.exclude(pk=person.pk)
-            form = CreateOrderForm(
-                host=person, selected_group=selected_group, proto_order=proto_order,
-                initial={
-                    'people': list(participants_excl_host.values_list('pk', flat=True)),
-                    'num_pizzas': proto_order.num_pizzas,
-                    'optimization_mode': proto_order.optimization_mode,
-                    'restaurant': proto_order.restaurant.pk,
-                    'group': selected_group.pk,
-                },
+            target_order = Order.objects.create(
+                host=person,
+                restaurant=data['restaurant'],
+                num_pizzas=data['num_pizzas'],
+                optimization_mode=data['optimization_mode'],
+                group=selected_group,
             )
-        else:
-            form = CreateOrderForm(host=person, selected_group=selected_group)
+            target_order.people.set(set(data['people']) | {person})
+            result = _run_solver(request, target_order)
+            if result is not None:
+                return result
+    else:
+        form = NewOrderForm(host=person, selected_group=selected_group)
 
-    # Build invite URL and guest PKs (used in both GET and POST-fall-through renders)
-    invite_url = None
-    guest_pks = set()
-    if proto_order and proto_order.invite_token:
-        invite_url = request.build_absolute_uri(
-            reverse('order_join', args=[proto_order.invite_token])
+    if form.is_bound:
+        current_person_pks = set(int(pk) for pk in (form['people'].value() or []))
+    else:
+        current_person_pks = set()
+
+    return render(request, 'webapp/order_new.html', {
+        'form': form,
+        'host': person,
+        'selected_group': selected_group,
+        'can_change_group': can_change_group,
+        'people': form.fields['people'].queryset,
+        'current_person_pks': current_person_pks,
+    })
+
+
+@login_required
+def draft_order(request, group_id, order_id):
+    """
+    GET:  Display the draft order form (locked restaurant, invite link, HTMX people polling).
+    POST: Generate the order (run solver), updating the proto-order in place.
+    """
+    person = Person.get_from_request(request)
+    selected_group = get_object_or_404(PizzaGroup, pk=group_id)
+    get_object_or_404(GroupMembership, group=selected_group, person=person)
+    can_change_group = person.pizza_groups.count() > 1
+
+    proto_order = get_object_or_404(Order, pk=order_id, host=person, invite_token__isnull=False)
+    if proto_order.pizzas.exists():
+        return redirect('order_results', order_id=proto_order.pk)
+
+    invite_url = request.build_absolute_uri(reverse('order_join', args=[proto_order.invite_token]))
+    guest_pks = set(proto_order.guest_persons.values_list('pk', flat=True))
+
+    if request.method == 'POST':
+        form = DraftOrderForm(request.POST, host=person, selected_group=selected_group, proto_order=proto_order)
+        if form.is_valid():
+            data = form.cleaned_data
+            proto_order.num_pizzas = data['num_pizzas']
+            proto_order.optimization_mode = data['optimization_mode']
+            proto_order.save()
+            proto_order.people.set(set(data['people']) | {person})
+            result = _run_solver(request, proto_order)
+            if result is not None:
+                return result
+    else:
+        participants_excl_host = proto_order.people.exclude(pk=person.pk)
+        form = DraftOrderForm(
+            host=person, selected_group=selected_group, proto_order=proto_order,
+            initial={
+                'people': list(participants_excl_host.values_list('pk', flat=True)),
+                'num_pizzas': proto_order.num_pizzas,
+                'optimization_mode': proto_order.optimization_mode,
+            },
         )
-        guest_pks = set(proto_order.guest_persons.values_list('pk', flat=True))
 
     if form.is_bound:
         current_person_pks = set(int(pk) for pk in (form['people'].value() or []))
     else:
         current_person_pks = set(form.initial.get('people') or [])
 
-    return render(request, 'webapp/order_create.html', {
+    return render(request, 'webapp/order_draft.html', {
         'form': form,
         'host': person,
         'selected_group': selected_group,
-        'groups': groups,
-        'can_change_group': len(groups) > 1,
+        'can_change_group': can_change_group,
         'proto_order': proto_order,
         'invite_url': invite_url,
         'people': form.fields['people'].queryset,
@@ -268,9 +279,8 @@ def order_results(request, order_id):
     order = get_object_or_404(Order, pk=order_id)
     if not order.pizzas.exists():
         if order.invite_token:
-            # TODO: these parameters feel weird
-            return redirect(reverse('create_order') + f'?order={order.pk}&group={order.group.pk}')
-        return redirect('create_order')
+            return redirect('draft_order', group_id=order.group.pk, order_id=order.pk)
+        return redirect('new_order', group_id=order.group.pk)
     pizza_list = list(order.pizzas.prefetch_related('toppings', 'people').all())
     guest_person_ids = set(order.guest_persons.values_list('pk', flat=True))
     if request.user.is_staff:
@@ -302,7 +312,7 @@ def order_cancel_invite(request, order_id):
         return redirect('order_results', order_id=order.pk)
     group_pk = order.group.pk
     order.delete()  # cascades to guest Persons
-    return redirect(reverse('create_order') + f'?group={group_pk}')
+    return redirect('new_order', group_id=group_pk)
 
 
 @login_required

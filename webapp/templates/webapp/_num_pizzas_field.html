@@ -1,0 +1,21 @@
+<div class="field">
+  <label class="label" for="{{ form.num_pizzas.id_for_label }}">{{ form.num_pizzas.label }}</label>
+  <div class="field has-addons" style="max-width:200px;" x-data="{ count: {{ form.num_pizzas.value|default:1 }} }">
+    <div class="control">
+      <button type="button" class="button" @click="count = Math.max(1, count - 1)">−</button>
+    </div>
+    <div class="control is-expanded">
+      <input class="input" style="text-align:center;" type="number"
+             name="{{ form.num_pizzas.html_name }}"
+             id="{{ form.num_pizzas.id_for_label }}"
+             x-model="count"
+             min="1">
+    </div>
+    <div class="control">
+      <button type="button" class="button" @click="count++">+</button>
+    </div>
+  </div>
+  {% if form.num_pizzas.errors %}
+  <p class="help is-danger">{% for e in form.num_pizzas.errors %}{{ e }}{% endfor %}</p>
+  {% endif %}
+</div>
