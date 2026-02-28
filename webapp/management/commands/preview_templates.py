@@ -282,8 +282,8 @@ class Command(BaseCommand):
         # authenticated=False uses an anonymous client - needed for pages that
         # redirect away when the user is already logged in.
         return [
-            ('order_create_step2',    f'/orders/new/?group={g.pk}',          True),
-            ('order_create_proto',    f'/orders/new/?order={po.pk}&group={g.pk}', True),
+            ('order_create_step2',    f'/orders/group/{g.pk}/new/',              True),
+            ('order_create_proto',    f'/orders/group/{g.pk}/draft/{po.pk}/', True),
             ('order_create_multi_group', '/orders/new/',                      True),
             ('order_results',         f'/orders/{so.pk}/results/',            True),
             ('profile_edit',          '/profile/edit/',                       True),

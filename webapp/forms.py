@@ -21,6 +21,10 @@ class BaseOrderForm(forms.Form):
         initial='minimize_dislikes',
         widget=forms.HiddenInput(),
     )
+    shareability_bonus_weight = forms.FloatField(
+        initial=0,
+        widget=forms.HiddenInput(),
+    )
 
     def __init__(self, *args, host=None, selected_group=None, **kwargs):
         super().__init__(*args, **kwargs)

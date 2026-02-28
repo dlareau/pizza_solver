@@ -13,6 +13,11 @@ Objectives:
     participant's pizza.
   - 'minimize_dislikes': Minimize the total DISLIKE (-1) violations.
 
+  Both objectives are modified by order.shareability_bonus_weight (w, default 0).
+  At w=0 only assigned people's preferences count (standard behavior). At w>0,
+  non-assigned people's preferences are also factored in with weight w, rewarding
+  pizzas that others in the order would enjoy and penalizing those they would not.
+
 Input:
   - An Order object (saved to DB) with .restaurant, .people, .num_pizzas,
     and .optimization_mode set and people M2M already populated
@@ -139,9 +144,15 @@ def solve(order: Order) -> list[OrderedPizza]:
             prob += z[p, t, k] >= x[p, k] + tv[t, k] - 1, f"z_ge_{p}_{t}_{k}"
 
     # --- Objective ---
-    score = {k: pulp.lpSum(prefs[(p, t)] * z[p, t, k]
-                           for (p, t) in nonzero_pairs)
-             for k in range(K)}
+    # shareability_bonus_weight (w) blends assigned-only scoring (w=0) with
+    # group-wide scoring (w=1). At w=0 this reduces to the standard
+    # prefs[p,t] * z[p,t,k] used by both existing modes.
+    f = order.shareability_bonus_weight
+    w = f / (K - 1) if K > 1 else 0
+    score = {k: pulp.lpSum(
+        prefs[(p, t)] * ((1 - w) * z[p, t, k] + w * tv[t, k])
+        for (p, t) in nonzero_pairs
+    ) for k in range(K)}
 
     if order.optimization_mode == 'minimize_dislikes':
         M = pulp.LpVariable("M", cat='Continuous')

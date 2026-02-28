@@ -26,7 +26,7 @@
     </div>
 
     <div class="field mt-2">
-      <button class="button is-info is-outlined" type="submit" name="invite_guests" value="1"
+      <button class="button is-link is-outlined" type="submit" name="invite_guests" value="1"
               id="invite-guests-btn" :disabled="!restaurant">
         Invite One-Time Guests
       </button>
@@ -60,6 +60,7 @@
 
   {% include "webapp/_num_pizzas_field.html" %}
 
+  {% include "webapp/_shareability_field.html" %}
   {{ form.optimization_mode }}
 
   <div class="field">

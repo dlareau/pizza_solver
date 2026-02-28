@@ -194,6 +194,7 @@ def new_order(request, group_id):
                 restaurant=data['restaurant'],
                 num_pizzas=data['num_pizzas'],
                 optimization_mode=data['optimization_mode'],
+                shareability_bonus_weight=data['shareability_bonus_weight'],
                 group=selected_group,
             )
             target_order.people.set(set(data['people']) | {person})
@@ -242,6 +243,7 @@ def draft_order(request, group_id, order_id):
             data = form.cleaned_data
             proto_order.num_pizzas = data['num_pizzas']
             proto_order.optimization_mode = data['optimization_mode']
+            proto_order.shareability_bonus_weight = data['shareability_bonus_weight']
             proto_order.save()
             proto_order.people.set(set(data['people']) | {person})
             result = _run_solver(request, proto_order)
@@ -255,6 +257,7 @@ def draft_order(request, group_id, order_id):
                 'people': list(participants_excl_host.values_list('pk', flat=True)),
                 'num_pizzas': proto_order.num_pizzas,
                 'optimization_mode': proto_order.optimization_mode,
+                'shareability_bonus_weight': proto_order.shareability_bonus_weight,
             },
         )
 

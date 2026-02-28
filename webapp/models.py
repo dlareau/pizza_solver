@@ -179,6 +179,12 @@ class Order(models.Model):
         max_length=20, choices=OPTIMIZATION_MODE_CHOICES, default='minimize_dislikes',
         help_text="Which optimization strategy to use"
     )
+    shareability_bonus_weight = models.FloatField(
+        default=0,
+        help_text="Shareability ratio (0–1): ratio of non-assigned people's collective influence to "
+                  "assigned people's collective influence when scoring pizzas. Normalized by number of "
+                  "pizzas at solve time. 0 = only assigned people's preferences are considered."
+    )
     invite_token = models.UUIDField(null=True, blank=True, unique=True)
     metadata = models.JSONField(default=dict, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

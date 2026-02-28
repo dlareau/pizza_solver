@@ -1,0 +1,23 @@
+<div class="field mb-5" x-data="{ w: {{ form.shareability_bonus_weight.value|default:0 }} }">
+  <label class="label">Will people be sharing pizza?</label>
+  <div class="buttons has-addons shareability-selector">
+    <button type="button" class="button" :class="{ 'is-selected': w == 0 }"
+            @click="w = 0">No sharing</button>
+    <button type="button" class="button" :class="{ 'is-selected': w == 0.3 }"
+            @click="w = 0.3">Some sharing</button>
+    <button type="button" class="button" :class="{ 'is-selected': w == 0.8 }"
+            @click="w = 0.8">A lot of sharing</button>
+  </div>
+  <p class="help">Controls how much the whole group's preferences influence each pizza, beyond just the people assigned to it.</p>
+  <input type="hidden" name="{{ form.shareability_bonus_weight.html_name }}" :value="w">
+  {% if form.shareability_bonus_weight.errors %}
+  <p class="help is-danger">{% for e in form.shareability_bonus_weight.errors %}{{ e }}{% endfor %}</p>
+  {% endif %}
+</div>
+<style>
+.shareability-selector .button.is-selected {
+  background-color: #d5d5d5;
+  border-color: #a0a0a0;
+  color: #363636;
+}
+</style>
