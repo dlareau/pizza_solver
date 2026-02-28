@@ -29,6 +29,9 @@
       <td>{{ restaurant.toppings.count }}</td>
       <td>
         <a class="button is-small is-warning" href="{% url 'restaurant_edit' restaurant.pk %}">Edit</a>
+        {% if can_clone %}
+        <a class="button is-small is-info" href="{% url 'restaurant_clone' restaurant.pk %}">Clone</a>
+        {% endif %}
         <a class="button is-small is-danger" href="{% url 'restaurant_delete' restaurant.pk %}">Delete</a>
       </td>
     </tr>

@@ -124,6 +124,22 @@ class RestaurantForm(forms.ModelForm):
             self.fields['toppings'].initial = self.instance.toppings.values_list('pk', flat=True)
 
 
+class CloneRestaurantForm(forms.Form):
+    target_group = forms.ModelChoiceField(
+        queryset=PizzaGroup.objects.none(),
+        label="Clone to group",
+        empty_label="-- Select target group --",
+    )
+    name = forms.CharField(max_length=200, label="Restaurant name")
+
+    def __init__(self, *args, restaurant=None, person=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if person and restaurant:
+            self.fields['target_group'].queryset = person.pizza_groups.exclude(pk=restaurant.group_id)
+        if restaurant:
+            self.fields['name'].initial = restaurant.name
+
+
 class PizzaGroupForm(forms.ModelForm):
     class Meta:
         model = PizzaGroup

@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 from .forms import (
     NewOrderForm, DraftOrderForm, GuestPreferenceForm,
     MergeToppingForm, PersonProfileForm, PizzaGroupForm, ToppingForm, RestaurantForm,
+    CloneRestaurantForm,
 )
 from .models import (
     GroupMembership, Order, OrderedPizza,
@@ -607,7 +608,7 @@ def topping_delete(request, pk):
 @login_required
 def restaurant_list(request):
     person = get_object_or_404(Person, user_account=request.user)
-    group_ids = person.pizza_groups.values_list('pk', flat=True)
+    group_ids = list(person.pizza_groups.values_list('pk', flat=True))
     restaurants = (
         PizzaRestaurant.objects
         .filter(group__in=group_ids)
@@ -615,7 +616,10 @@ def restaurant_list(request):
         .prefetch_related('toppings')
         .order_by('name')
     )
-    return render(request, 'webapp/restaurants/list.html', {'restaurants': restaurants})
+    return render(request, 'webapp/restaurants/list.html', {
+        'restaurants': restaurants,
+        'can_clone': len(group_ids) > 1,
+    })
 
 
 @login_required
@@ -705,4 +709,34 @@ def restaurant_delete(request, pk):
         messages.success(request, f"Restaurant '{name}' deleted.")
         return redirect('restaurant_list')
     return render(request, 'webapp/restaurants/confirm_delete.html', {'restaurant': restaurant})
+
+
+@login_required
+def restaurant_clone(request, pk):
+    restaurant = get_object_or_404(PizzaRestaurant, pk=pk)
+    person = get_object_or_404(Person, user_account=request.user)
+    if not restaurant.group or not person.pizza_groups.filter(pk=restaurant.group_id).exists():
+        return HttpResponseForbidden("You don't have permission to clone this restaurant.")
+    other_groups = list(person.pizza_groups.exclude(pk=restaurant.group_id))
+    if not other_groups:
+        messages.error(request, "You need to be in at least one other group to clone a restaurant.")
+        return redirect('restaurant_list')
+    if request.method == 'POST':
+        form = CloneRestaurantForm(request.POST, restaurant=restaurant, person=person)
+        if form.is_valid():
+            target_group = form.cleaned_data['target_group']
+            name = form.cleaned_data['name']
+            new_restaurant = PizzaRestaurant.objects.create(name=name, group=target_group)
+            RestaurantTopping.objects.bulk_create([
+                RestaurantTopping(restaurant=new_restaurant, topping=topping)
+                for topping in restaurant.toppings.all()
+            ])
+            messages.success(request, f"Restaurant '{new_restaurant}' cloned to {target_group}.")
+            return redirect('restaurant_list')
+    else:
+        form = CloneRestaurantForm(restaurant=restaurant, person=person)
+    return render(request, 'webapp/restaurants/clone.html', {
+        'form': form,
+        'restaurant': restaurant,
+    })
 

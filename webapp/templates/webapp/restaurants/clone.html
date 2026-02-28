@@ -1,0 +1,45 @@
+{% extends "webapp/base.html" %}
+{% block title %}Clone Restaurant{% endblock %}
+
+{% block content %}
+<h1 class="title">Clone Restaurant</h1>
+
+<div class="notification is-info is-light">
+  A copy of <strong>{{ restaurant.name }}</strong> (including all its toppings) will be created in
+  the group you choose below. You can rename it before cloning.
+</div>
+
+<div class="box" style="max-width:480px;">
+  <form method="post">
+    {% csrf_token %}
+    <div class="field">
+      <label class="label">{{ form.name.label }}</label>
+      <div class="control">
+        <input class="input" type="text" name="{{ form.name.html_name }}" value="{{ form.name.value|default:'' }}">
+      </div>
+      {% if form.name.errors %}
+      <p class="help is-danger">{{ form.name.errors }}</p>
+      {% endif %}
+    </div>
+    <div class="field">
+      <label class="label">{{ form.target_group.label }}</label>
+      <div class="control">
+        <div class="select">
+          {{ form.target_group }}
+        </div>
+      </div>
+      {% if form.target_group.errors %}
+      <p class="help is-danger">{{ form.target_group.errors }}</p>
+      {% endif %}
+    </div>
+    <div class="field is-grouped">
+      <div class="control">
+        <button class="button is-info" type="submit">Clone "{{ restaurant.name }}"</button>
+      </div>
+      <div class="control">
+        <a class="button is-light" href="{% url 'restaurant_list' %}">Cancel</a>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
