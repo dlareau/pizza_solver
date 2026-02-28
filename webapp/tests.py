@@ -35,13 +35,15 @@ def make_person(name, unrated_is_dislike=False, prefs=None):
     return p
 
 
-def make_order(restaurant, host, people, num_pizzas=1, optimization_mode='maximize_likes', group=None):
+def make_order(restaurant, host, people, num_pizzas=1, optimization_mode='maximize_likes',
+               group=None, shareability_bonus_weight=0):
     if group is None:
         group = make_group()
     order = Order.objects.create(
         host=host, restaurant=restaurant,
         num_pizzas=num_pizzas,
         optimization_mode=optimization_mode,
+        shareability_bonus_weight=shareability_bonus_weight,
         group=group,
     )
     order.people.set(people)
@@ -93,6 +95,7 @@ class OrderModelTests(TestCase):
         order = Order.objects.create(host=self.person, restaurant=self.restaurant, group=self.group)
         self.assertEqual(order.num_pizzas, 1)
         self.assertEqual(order.optimization_mode, 'minimize_dislikes')
+        self.assertEqual(order.shareability_bonus_weight, 0)
 
     def test_order_str(self):
         order = Order.objects.create(host=self.person, restaurant=self.restaurant, group=self.group)
@@ -168,6 +171,7 @@ class NewOrderViewTests(TestCase):
             'people': [self.bob.pk],
             'num_pizzas': 1,
             'optimization_mode': 'maximize_likes',
+            'shareability_bonus_weight': '0',
         })
         self.assertEqual(response.status_code, 302)
         self.assertIn('/results/', response['Location'])
@@ -180,6 +184,7 @@ class NewOrderViewTests(TestCase):
             'people': [self.bob.pk],
             'num_pizzas': 1,
             'optimization_mode': 'maximize_likes',
+            'shareability_bonus_weight': '0',
         })
         self.assertEqual(response.status_code, 302)
         order = Order.objects.get()
@@ -195,6 +200,19 @@ class NewOrderViewTests(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "more pizzas than people")
+
+    def test_shareability_weight_stored_on_order(self):
+        """POSTing shareability_bonus_weight=0.3 should store 0.3 on the created Order."""
+        response = self.client.post(self._new_order_url(), data={
+            'restaurant': self.restaurant.pk,
+            'people': [self.bob.pk],
+            'num_pizzas': 1,
+            'optimization_mode': 'maximize_likes',
+            'shareability_bonus_weight': '0.3',
+        })
+        self.assertEqual(response.status_code, 302)
+        order = Order.objects.get()
+        self.assertAlmostEqual(order.shareability_bonus_weight, 0.3)
 
     def test_invite_guests_creates_proto_order_and_redirects_to_draft(self):
         response = self.client.post(self._new_order_url(), data={
@@ -245,6 +263,7 @@ class DraftOrderViewTests(TestCase):
             'people': [self.bob.pk],
             'num_pizzas': 1,
             'optimization_mode': 'maximize_likes',
+            'shareability_bonus_weight': '0',
         })
         self.assertEqual(response.status_code, 302)
         self.assertIn('/results/', response['Location'])
@@ -464,3 +483,54 @@ class SolverTests(TestCase):
         left_ids = set(pizzas[0].toppings.values_list('id', flat=True))
         self.assertIn(t_unrated.id, left_ids,
                       "Liked topping should appear on pizza")
+
+    # --- test_shareability_k1_no_division_by_zero ---
+
+    def test_shareability_k1_no_division_by_zero(self):
+        """With K=1, a non-zero shareability weight should not cause a division-by-zero error."""
+        t1, = self._make_toppings("K1ShareTop")
+        restaurant = make_restaurant(name="K1Share Restaurant", toppings=[t1])
+        alice = make_person("AliceK1Share", prefs={t1: PersonToppingPreference.LIKE})
+        bob = make_person("BobK1Share")
+        order = make_order(restaurant, alice, [alice, bob], num_pizzas=1,
+                           shareability_bonus_weight=0.8)
+
+        pizzas = solve(order)
+
+        self.assertEqual(len(pizzas), 1)
+        people_ids = set(pizzas[0].people.values_list('id', flat=True))
+        self.assertIn(alice.id, people_ids)
+        self.assertIn(bob.id, people_ids)
+
+    # --- test_shareability_spreads_liked_topping_to_non_assigned_pizza ---
+
+    def test_shareability_spreads_liked_topping_to_non_assigned_pizza(self):
+        """With shareability, a topping liked by Alice but neutral for Bob appears on Bob's pizza.
+
+        Without shareability (w=0): the solver has no objective incentive to add a 0-score
+        topping to Bob's pizza, so it stays off.
+
+        With shareability (f=0.8, K=2 → w=0.8): Alice's non-assigned contribution (+0.8)
+        to Bob's pizza score makes adding the topping worthwhile.
+        """
+        t1, = self._make_toppings("SpreadTop")
+        restaurant = make_restaurant(name="Spread Restaurant", toppings=[t1])
+        alice = make_person("AliceSpread", prefs={t1: PersonToppingPreference.LIKE})
+        bob = make_person("BobSpread")  # Bob has no rated preference for t1
+
+        # WITHOUT shareability: T1 has 0 objective contribution on Bob's pizza, so solver omits it.
+        order_no = make_order(restaurant, alice, [alice, bob], num_pizzas=2,
+                              optimization_mode='maximize_likes', shareability_bonus_weight=0)
+        pizzas_no = solve(order_no)
+        bob_pizza_no = next(p for p in pizzas_no if bob in p.people.all())
+        self.assertNotIn(t1.id, set(bob_pizza_no.toppings.values_list('id', flat=True)),
+                         "Without shareability, T1 should not appear on Bob's neutral pizza")
+
+        # WITH shareability: Alice's non-assigned like (+0.8) gives positive incentive for T1 on
+        # Bob's pizza.
+        order_yes = make_order(restaurant, alice, [alice, bob], num_pizzas=2,
+                               optimization_mode='maximize_likes', shareability_bonus_weight=0.8)
+        pizzas_yes = solve(order_yes)
+        bob_pizza_yes = next(p for p in pizzas_yes if bob in p.people.all())
+        self.assertIn(t1.id, set(bob_pizza_yes.toppings.values_list('id', flat=True)),
+                      "With shareability, Alice's non-assigned like should put T1 on Bob's pizza")
