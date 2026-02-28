@@ -69,6 +69,7 @@ def profile_edit(request):
         if form.is_valid():
             form.save()
             new_prefs = {}
+
             for topping in toppings:
                 val_str = request.POST.get(f'pref_{topping.pk}')
                 if val_str == 'allergy':
