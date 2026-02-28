@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Pizza Solver{% endblock %}</title>
+  <title>{% block title %}{{ config.SITE_TITLE }}{% endblock %}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
   {% block extra_head %}{% endblock %}
 </head>
@@ -11,7 +11,7 @@
 
 <nav class="navbar is-light" style="border-bottom: 2px solid #dbdbdb;" role="navigation" aria-label="main navigation">
   <div class="navbar-brand">
-    <a class="navbar-item has-text-weight-bold" href="/">Pizza Solver</a>
+    <a class="navbar-item has-text-weight-bold" href="/">{{ config.SITE_TITLE }}</a>
     <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMenu">
       <span aria-hidden="true"></span>
       <span aria-hidden="true"></span>

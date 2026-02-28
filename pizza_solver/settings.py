@@ -60,6 +60,7 @@ CONSTANCE_BACKEND = 'constance.backends.database.DatabaseBackend'
 
 CONSTANCE_CONFIG = {
     'MAX_TOPPINGS_PER_PIZZA': (3, 'Maximum number of toppings allowed per pizza'),
+    'SITE_TITLE': ('Pizza Solver', 'Site title shown in the navbar and sign-in page'),
 }
 
 MIDDLEWARE = [
@@ -86,6 +87,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'constance.context_processors.config',
             ],
         },
     },
