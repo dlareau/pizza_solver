@@ -65,6 +65,7 @@ PAGE_LABELS = [
     'topping_form_create',
     'topping_merge',
     'topping_confirm_delete',
+    'staff_preferences',
     'sign_in',
     'sign_up',
 ]
@@ -303,6 +304,7 @@ class Command(BaseCommand):
             ('topping_form_create',   '/toppings/new/',                       True),
             ('topping_merge',         f'/toppings/{t.pk}/merge/',             True),
             ('topping_confirm_delete', f'/toppings/{t.pk}/delete/',           True),
+            ('staff_preferences',     f'/staff/preferences/?group={g.pk}',   True),
             ('sign_in',               '/accounts/login/',                     False),
             ('sign_up',               '/accounts/signup/',                    False),
         ]

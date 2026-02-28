@@ -17,6 +17,8 @@ urlpatterns = [
     path('toppings/<int:pk>/merge/', views.topping_merge, name='topping_merge'),
     path('toppings/<int:pk>/delete/', views.topping_delete, name='topping_delete'),
 
+    path('staff/preferences/', views.staff_preferences, name='staff_preferences'),
+
     path('restaurants/', views.restaurant_list, name='restaurant_list'),
     path('restaurants/new/', views.restaurant_create, name='restaurant_create'),
     path('restaurants/<int:pk>/edit/', views.restaurant_edit, name='restaurant_edit'),

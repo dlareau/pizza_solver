@@ -604,6 +604,56 @@ def topping_delete(request, pk):
     return render(request, 'webapp/toppings/confirm_delete.html', {'topping': topping})
 
 
+@login_required
+@staff_member_required
+def staff_preferences(request):
+    all_groups = PizzaGroup.objects.order_by(Lower('name'))
+
+    selected_group = None
+    members = []
+    toppings = []
+    matrix = []
+
+    group_pk = request.GET.get('group')
+    if group_pk:
+        try:
+            selected_group = PizzaGroup.objects.get(pk=group_pk)
+        except PizzaGroup.DoesNotExist:
+            pass
+
+    if selected_group is not None:
+        members = list(
+            selected_group.members
+            .filter(guest_for_order__isnull=True)
+            .order_by(Lower('name'))
+        )
+        toppings = list(Topping.objects.order_by(Lower('name')))
+
+        prefs_qs = PersonToppingPreference.objects.filter(
+            person_id__in=[m.pk for m in members],
+            topping_id__in=[t.pk for t in toppings],
+        ).values('person_id', 'topping_id', 'preference')
+
+        pref_lookup = {(row['topping_id'], row['person_id']): row['preference'] for row in prefs_qs}
+
+        matrix = [
+            {'topping': t, 'cells': [pref_lookup.get((t.pk, m.pk)) for m in members]}
+            for t in toppings
+        ]
+
+    return render(request, 'webapp/staff/preferences.html', {
+        'all_groups': all_groups,
+        'selected_group': selected_group,
+        'members': members,
+        'toppings': toppings,
+        'matrix': matrix,
+        'ALLERGY': PersonToppingPreference.ALLERGY,
+        'DISLIKE': PersonToppingPreference.DISLIKE,
+        'NEUTRAL': PersonToppingPreference.NEUTRAL,
+        'LIKE': PersonToppingPreference.LIKE,
+    })
+
+
 # ---------------------------------------------------------------------------
 # Restaurant CRUD
 # ---------------------------------------------------------------------------

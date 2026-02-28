@@ -1,0 +1,97 @@
+{% extends "webapp/base.html" %}
+{% block title %}Group Preferences{% endblock %}
+
+{% block content %}
+<div class="level mb-4">
+  <div class="level-left">
+    <h1 class="title level-item">Group Preferences</h1>
+  </div>
+</div>
+
+<form method="get" action="" class="mb-5" style="max-width: 480px;">
+  <div class="field has-addons">
+    <div class="control is-expanded">
+      <div class="select is-fullwidth">
+        <select name="group">
+          <option value="">-- Select a group --</option>
+          {% for group in all_groups %}
+          <option value="{{ group.pk }}"
+            {% if selected_group and group.pk == selected_group.pk %}selected{% endif %}>
+            {{ group.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="control">
+      <button class="button is-primary" type="submit">View</button>
+    </div>
+  </div>
+</form>
+
+{% if selected_group %}
+  {% if not members %}
+  <div class="notification is-warning is-light">
+    <strong>{{ selected_group.name }}</strong> has no persistent members.
+  </div>
+
+  {% elif not toppings %}
+  <div class="notification is-warning is-light">
+    No toppings exist in the system yet.
+  </div>
+
+  {% else %}
+  <p class="mb-3">
+    <strong>{{ selected_group.name }}</strong> &mdash;
+    {{ members|length }} member{{ members|length|pluralize }},
+    {{ toppings|length }} topping{{ toppings|length|pluralize }}
+  </p>
+
+  <div class="tags mb-2">
+    <span class="tag is-danger">Allergy</span>
+    <span class="tag is-warning">Dislike</span>
+    <span class="tag is-info">Neutral</span>
+    <span class="tag is-success">Like</span>
+    <span class="tag is-light">&mdash; unset</span>
+  </div>
+  <p class="help mb-4">* = member has <em>Treat unset as dislike</em> enabled.</p>
+
+  <div style="overflow-x: auto;">
+    <table class="table is-bordered is-striped is-hoverable" style="white-space: nowrap;">
+      <thead>
+        <tr>
+          <th style="min-width: 140px;">Topping</th>
+          {% for member in members %}
+          <th style="min-width: 100px;">
+            {{ member.name }}{% if member.unrated_is_dislike %} *{% endif %}
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in matrix %}
+        <tr>
+          <td><strong>{{ row.topping.name }}</strong></td>
+          {% for cell in row.cells %}
+          <td class="has-text-centered">
+            {% if cell is None %}
+            <span class="has-text-grey">&mdash;</span>
+            {% elif cell == ALLERGY %}
+            <span class="tag is-danger">Allergy</span>
+            {% elif cell == DISLIKE %}
+            <span class="tag is-warning">Dislike</span>
+            {% elif cell == NEUTRAL %}
+            <span class="tag is-info">Neutral</span>
+            {% elif cell == LIKE %}
+            <span class="tag is-success">Like</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
