@@ -16,13 +16,14 @@ import uuid
 import webbrowser
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db import transaction
 from django.test import Client
+from django.test.runner import DiscoverRunner
 
 from webapp.models import (
     GroupMembership, Order, OrderedPizza,
-    Person, PizzaGroup, PizzaRestaurant, Topping, User, RestaurantTopping,
+    Person, PersonToppingPreference, PizzaGroup, PizzaRestaurant, Topping, User, RestaurantTopping,
 )
 
 PREVIEW_EMAIL = "preview@pizza.test"
@@ -87,14 +88,18 @@ class Command(BaseCommand):
             selected_label = options['template']
         else:
             selected_label = self._prompt_selection()
+        settings.DATABASES['default'].setdefault('TEST', {})['NAME'] = ':memory:'
+        runner = DiscoverRunner(verbosity=0)
+        old_config = runner.setup_databases()
         self.stdout.write("Setting up preview data...")
-        with transaction.atomic():
+        try:
             ctx = self._setup_data()
             pages = self._build_pages(ctx)
             if selected_label is not None:
                 pages = [(l, u, a) for l, u, a in pages if l == selected_label]
             saved = self._fetch_pages(pages, ctx['user'])
-            transaction.set_rollback(True)  # rolls back on clean exit - no DB changes persist
+        finally:
+            runner.teardown_databases(old_config)
         self._open_pages(saved)
         self.stdout.write(self.style.SUCCESS("Done."))
 
@@ -143,8 +148,11 @@ class Command(BaseCommand):
         )
         alice, _ = Person.objects.get_or_create(
             user_account=alice_user,
-            defaults={'name': 'Alice', 'email': ALICE_EMAIL},
+            defaults={'name': 'Alice', 'email': ALICE_EMAIL, 'unrated_is_dislike': True},
         )
+        if not alice.unrated_is_dislike:
+            alice.unrated_is_dislike = True
+            alice.save()
 
         # 4. Group with preview user as admin + alice as member
         group, _ = PizzaGroup.objects.get_or_create(name=GROUP_NAME)
@@ -247,6 +255,32 @@ class Command(BaseCommand):
             pizza = OrderedPizza.objects.create(order=solved_guest_order)
             pizza.toppings.set(toppings[:3])
             pizza.people.add(person)
+
+        # 10. Sample preferences for preview user and alice
+        LIKE    = PersonToppingPreference.LIKE
+        NEUTRAL = PersonToppingPreference.NEUTRAL
+        DISLIKE = PersonToppingPreference.DISLIKE
+        ALLERGY = PersonToppingPreference.ALLERGY
+        preview_prefs = [
+            (person, toppings[0], LIKE),
+            (person, toppings[1], LIKE),
+            (person, toppings[2], NEUTRAL),
+            (person, toppings[3], DISLIKE),
+            (person, toppings[4], ALLERGY),
+            (person, toppings[6], LIKE),
+            (person, toppings[8], NEUTRAL),
+            (alice,  toppings[0], NEUTRAL),
+            (alice,  toppings[1], DISLIKE),
+            (alice,  toppings[3], LIKE),
+            (alice,  toppings[4], LIKE),
+            (alice,  toppings[5], ALLERGY),
+            (alice,  toppings[7], DISLIKE),
+            (alice,  toppings[9], LIKE),
+        ]
+        for p, t, pref in preview_prefs:
+            PersonToppingPreference.objects.update_or_create(
+                person=p, topping=t, defaults={'preference': pref}
+            )
 
         self.stdout.write(
             f"  group={group.pk}  group2={group2.pk}  restaurant={restaurant.pk}  "

@@ -1,6 +1,15 @@
 {% extends "webapp/base.html" %}
 {% block title %}Group Preferences{% endblock %}
 
+{% block extra_head %}
+<style>
+  .tag.is-danger.is-default  { background-color: transparent !important; color: black; border: 2.5px solid var(--bulma-danger); }
+  .tag.is-warning.is-default { background-color: transparent !important; color: black; border: 2.5px solid var(--bulma-warning); }
+  .tag.is-info.is-default    { background-color: transparent !important; color: black; border: 2.5px solid var(--bulma-info); }
+  .tag.is-success.is-default { background-color: transparent !important; color: black; border: 2.5px solid var(--bulma-success); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="level mb-4">
   <div class="level-left">
@@ -31,12 +40,12 @@
 
 {% if selected_group %}
   {% if not members %}
-  <div class="notification is-warning is-light">
+  <div class="notification is-warning is-default">
     <strong>{{ selected_group.name }}</strong> has no persistent members.
   </div>
 
   {% elif not toppings %}
-  <div class="notification is-warning is-light">
+  <div class="notification is-warning is-default">
     No toppings exist in the system yet.
   </div>
 
@@ -47,14 +56,21 @@
     {{ toppings|length }} topping{{ toppings|length|pluralize }}
   </p>
 
-  <div class="tags mb-2">
-    <span class="tag is-danger">Allergy</span>
-    <span class="tag is-warning">Dislike</span>
-    <span class="tag is-info">Neutral</span>
-    <span class="tag is-success">Like</span>
-    <span class="tag is-light">&mdash; unset</span>
+  <div class="is-flex mb-1" style="gap: 1.5rem; flex-wrap: wrap; align-items: center;">
+    <span class="is-size-7 has-text-grey">Explicit:</span>
+    <div class="tags mb-0">
+      <span class="tag is-danger">Allergy</span>
+      <span class="tag is-warning">Dislike</span>
+      <span class="tag is-info">Neutral</span>
+      <span class="tag is-success">Like</span>
+    </div>
+    <span class="is-size-7 has-text-grey">Default:</span>
+    <div class="tags mb-0">
+      <span class="tag is-warning is-default">Dislike</span>
+      <span class="tag is-info is-default">Neutral</span>
+    </div>
   </div>
-  <p class="help mb-4">* = member has <em>Treat unset as dislike</em> enabled.</p>
+  <p class="help mb-4">* = defaults unset preferences to Dislike.</p>
 
   <div style="overflow-x: auto;">
     <table class="table is-bordered is-striped is-hoverable" style="white-space: nowrap;">
@@ -74,16 +90,14 @@
           <td><strong>{{ row.topping.name }}</strong></td>
           {% for cell in row.cells %}
           <td class="has-text-centered">
-            {% if cell is None %}
-            <span class="has-text-grey">&mdash;</span>
-            {% elif cell == ALLERGY %}
-            <span class="tag is-danger">Allergy</span>
-            {% elif cell == DISLIKE %}
-            <span class="tag is-warning">Dislike</span>
-            {% elif cell == NEUTRAL %}
-            <span class="tag is-info">Neutral</span>
-            {% elif cell == LIKE %}
-            <span class="tag is-success">Like</span>
+            {% if cell.label == 'allergy' %}
+            <span class="tag is-danger{% if cell.is_default %} is-default{% endif %}">Allergy</span>
+            {% elif cell.label == 'dislike' %}
+            <span class="tag is-warning{% if cell.is_default %} is-default{% endif %}">Dislike</span>
+            {% elif cell.label == 'neutral' %}
+            <span class="tag is-info{% if cell.is_default %} is-default{% endif %}">Neutral</span>
+            {% elif cell.label == 'like' %}
+            <span class="tag is-success{% if cell.is_default %} is-default{% endif %}">Like</span>
             {% endif %}
           </td>
           {% endfor %}

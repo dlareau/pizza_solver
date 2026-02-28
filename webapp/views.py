@@ -636,10 +636,27 @@ def staff_preferences(request):
 
         pref_lookup = {(row['topping_id'], row['person_id']): row['preference'] for row in prefs_qs}
 
-        matrix = [
-            {'topping': t, 'cells': [pref_lookup.get((t.pk, m.pk)) for m in members]}
-            for t in toppings
-        ]
+        pref_label = {
+            PersonToppingPreference.ALLERGY: 'allergy',
+            PersonToppingPreference.DISLIKE: 'dislike',
+            PersonToppingPreference.NEUTRAL: 'neutral',
+            PersonToppingPreference.LIKE:    'like',
+        }
+        default_label = {
+            m.pk: 'dislike' if m.unrated_is_dislike else 'neutral'
+            for m in members
+        }
+
+        matrix = []
+        for t in toppings:
+            cells = []
+            for m in members:
+                explicit = pref_lookup.get((t.pk, m.pk))
+                if explicit is None:
+                    cells.append({'label': default_label[m.pk], 'is_default': True})
+                else:
+                    cells.append({'label': pref_label[explicit], 'is_default': False})
+            matrix.append({'topping': t, 'cells': cells})
 
     return render(request, 'webapp/staff/preferences.html', {
         'all_groups': all_groups,
@@ -647,10 +664,6 @@ def staff_preferences(request):
         'members': members,
         'toppings': toppings,
         'matrix': matrix,
-        'ALLERGY': PersonToppingPreference.ALLERGY,
-        'DISLIKE': PersonToppingPreference.DISLIKE,
-        'NEUTRAL': PersonToppingPreference.NEUTRAL,
-        'LIKE': PersonToppingPreference.LIKE,
     })
 
 
