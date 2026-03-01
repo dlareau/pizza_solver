@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase, Client
 from django.urls import reverse
 
@@ -286,6 +287,12 @@ class OrderResultsViewTests(TestCase):
         # Orders without pizzas redirect; add one so the results page renders
         self.pizza = OrderedPizza.objects.create(order=self.order)
         self.pizza.people.set([self.alice])
+        # Link alice to a Django user account and add her to the group
+        self.user = get_user_model().objects.create_user(username="alice", password="testpass")
+        self.alice.user_account = self.user
+        self.alice.save()
+        GroupMembership.objects.create(group=self.group, person=self.alice)
+        self.client.login(username="alice", password="testpass")
 
     def test_results_page_returns_200(self):
         url = reverse('order_results', kwargs={'order_id': self.order.pk})
