@@ -10,6 +10,7 @@
   <span class="tag"><strong>Host:</strong>&nbsp;{{ order.host }}</span>
   <span class="tag"><strong>Pizzas:</strong>&nbsp;{{ order.num_pizzas }}</span>
   <span class="tag"><strong>People:</strong>&nbsp;{{ order.people.count }}</span>
+  <span class="tag"><strong>Sharing:</strong>&nbsp;{% if order.shareability_bonus_weight == 0 %}No sharing{% elif order.shareability_bonus_weight == 0.3 %}Some sharing{% else %}A lot of sharing{% endif %}</span>
 </div>
 
 {% if pizzas_with_scores %}
@@ -37,7 +38,7 @@
         <p class="card-header-title">
           Pizza #{{ forloop.counter }}
           <span class="tag is-light ml-3">{{ pizza.toppings.count }} topping{{ pizza.toppings.count|pluralize }} · {{ pizza.people.count }} person{{ pizza.people.count|pluralize }}</span>
-          {% if score is not None %}<span class="tag is-info ml-2">Score: {{ score }}</span>{% endif %}
+          {% if score is not None %}<span class="tag is-info ml-2">Score: {{ score|floatformat:"-2" }}</span>{% endif %}
         </p>
       </div>
       <div class="card-content">
@@ -73,5 +74,11 @@
 {% endif %}
 
 <a class="button is-light mt-2" href="{% url 'order_select_group' %}">← Create another order</a>
+{% if request.user.is_staff %}
+<form method="post" action="{% url 'order_recompute' order.pk %}" class="is-inline">
+  {% csrf_token %}
+  <button type="submit" class="button is-warning is-light mt-2 ml-2">Recompute Order</button>
+</form>
+{% endif %}
 
 {% endblock %}

@@ -303,6 +303,16 @@ def order_results(request, order_id):
     })
 
 
+@login_required
+@staff_member_required
+@require_POST
+def recompute_order(request, order_id):
+    """Delete existing pizza assignments and re-run the solver. Staff only."""
+    order = get_object_or_404(Order, pk=order_id)
+    order.pizzas.all().delete()
+    return _run_solver(request, order)
+
+
 # ---------------------------------------------------------------------------
 # Guest views
 # ---------------------------------------------------------------------------
