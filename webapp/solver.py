@@ -29,6 +29,7 @@ Output:
 """
 
 import math
+import random
 
 import pulp
 from constance import config
@@ -90,6 +91,8 @@ def solve(order: Order) -> list[OrderedPizza]:
     """
     people = list(order.people.all())
     toppings = list(order.restaurant.toppings.all())
+    if not config.DETERMINISTIC:
+        random.shuffle(toppings)
 
     num_pizzas = order.num_pizzas
     num_people = len(people)
