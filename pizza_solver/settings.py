@@ -60,6 +60,7 @@ CONSTANCE_BACKEND = 'constance.backends.database.DatabaseBackend'
 
 CONSTANCE_CONFIG = {
     'MAX_TOPPINGS_PER_PIZZA': (3, 'Maximum number of toppings allowed per pizza'),
+    'DISLIKE_WEIGHT': (-1.0, 'Score weight applied to dislikes in the solver objective (e.g. -1.5 penalizes dislikes more)'),
     'SITE_TITLE': ('Pizza Solver', 'Site title shown in the navbar and sign-in page'),
 }
 

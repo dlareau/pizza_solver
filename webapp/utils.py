@@ -1,3 +1,5 @@
+from constance import config
+
 from webapp.models import PersonToppingPreference
 
 def compute_pizza_scores(pizza_list):
@@ -29,7 +31,9 @@ def compute_pizza_scores(pizza_list):
             default = PersonToppingPreference.DISLIKE if person.unrated_is_dislike else PersonToppingPreference.NEUTRAL
             for topping in toppings:
                 pref = pref_map.get((person.pk, topping.pk), default)
-                if pref not in (PersonToppingPreference.NEUTRAL, PersonToppingPreference.ALLERGY):
+                if pref == PersonToppingPreference.DISLIKE:
+                    score += config.DISLIKE_WEIGHT
+                elif pref not in (PersonToppingPreference.NEUTRAL, PersonToppingPreference.ALLERGY):
                     score += pref
         scores[pizza_pk] = score
     return scores

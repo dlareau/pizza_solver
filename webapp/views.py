@@ -282,6 +282,8 @@ def draft_order(request, group_id, order_id):
 def order_results(request, order_id):
     """Results page for a solved order. Unsolved orders redirect back to create_order."""
     order = get_object_or_404(Order, pk=order_id)
+    if not order.group or not request.user.person_profile.pizza_groups.filter(pk=order.group_id).exists():
+        return HttpResponseForbidden("You don't have permission to view this order.")
     if not order.pizzas.exists():
         if order.invite_token:
             return redirect('draft_order', group_id=order.group.pk, order_id=order.pk)

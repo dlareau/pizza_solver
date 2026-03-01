@@ -92,6 +92,11 @@ def solve(order: Order) -> list[OrderedPizza]:
 
     prefs = _build_prefs(people, toppings)
 
+    if config.DISLIKE_WEIGHT != PersonToppingPreference.DISLIKE:
+        for key, val in prefs.items():
+            if val == PersonToppingPreference.DISLIKE:
+                prefs[key] = config.DISLIKE_WEIGHT
+
     prob = pulp.LpProblem("pizza", pulp.LpMaximize)
 
     # --- Variables ---
